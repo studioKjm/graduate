@@ -43,7 +43,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'main',
       name: '자본 흐름 데이터',
       method: 'GET',
-      path: '/api/v1/capitalflows/capitalflows/',
+      path: '/capitalflows/',
       description: '전세계 자본 흐름 데이터를 조회합니다. 필터링, 정렬, 집계 기능을 제공합니다.',
       parameters: [
         { name: 'country', type: 'string', required: false, description: '국가 코드 (예: CHN, USA)', example: 'CHN' },
@@ -57,22 +57,22 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       examples: [
         {
           title: '전체 데이터',
-          url: `${apiBaseUrl}/api/v1/capitalflows/capitalflows/`,
+          url: `${apiBaseUrl}/capitalflows/`,
           description: '모든 자본 흐름 데이터 조회'
         },
         {
           title: '중국 AI 분야',
-          url: `${apiBaseUrl}/api/v1/capitalflows/capitalflows/?country=CHN&sector=AI`,
+          url: `${apiBaseUrl}/capitalflows/?country=CHN&sector=AI`,
           description: '중국의 AI 분야 투자 데이터'
         },
         {
           title: '중국 AI 분야 집계',
-          url: `${apiBaseUrl}/api/v1/capitalflows/capitalflows/?country=CHN&sector=AI&aggregate=true`,
+          url: `${apiBaseUrl}/capitalflows/?country=CHN&sector=AI&aggregate=true`,
           description: '중국 AI 분야 총 투자액'
         },
         {
           title: '국가별 정렬',
-          url: `${apiBaseUrl}/api/v1/capitalflows/capitalflows/?ordering=country__code&page_size=100`,
+          url: `${apiBaseUrl}/capitalflows/?ordering=country__code&page_size=100`,
           description: '국가 코드별로 정렬된 데이터'
         }
       ]
@@ -84,12 +84,12 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'metadata',
       name: '메타데이터',
       method: 'GET',
-      path: '/api/v1/capitalflows/metadata/',
+      path: '/metadata/',
       description: '국가, 분야, 자본타입 등 메타데이터를 제공합니다.',
       examples: [
         {
           title: '전체 메타데이터',
-          url: `${apiBaseUrl}/api/v1/capitalflows/metadata/`,
+          url: `${apiBaseUrl}/metadata/`,
           description: '모든 메타데이터 (국가, 분야, 자본타입)'
         }
       ]
@@ -101,12 +101,12 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'system',
       name: '시스템 상태',
       method: 'GET',
-      path: '/api/v1/capitalflows/health/',
+      path: '/health/',
       description: '시스템 상태를 확인합니다.',
       examples: [
         {
           title: '헬스 체크',
-          url: `${apiBaseUrl}/api/v1/capitalflows/health/`,
+          url: `${apiBaseUrl}/health/`,
           description: '시스템 상태 및 데이터베이스 연결 확인'
         }
       ]
@@ -118,7 +118,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'admin',
       name: '데이터 수집',
       method: 'POST',
-      path: '/api/v1/capitalflows/admin/collect/',
+      path: '/admin/collect/',
       description: '다양한 소스에서 데이터를 수집합니다.',
       parameters: [
         { name: 'source', type: 'string', required: false, description: '데이터 소스 (IMF, OECD, Crunchbase)', example: 'IMF' },
@@ -127,7 +127,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       examples: [
         {
           title: 'IMF 데이터 수집',
-          url: `${apiBaseUrl}/api/v1/capitalflows/admin/collect/`,
+          url: `${apiBaseUrl}/admin/collect/`,
           description: 'POST 요청으로 IMF 데이터 수집 실행'
         }
       ]
@@ -139,7 +139,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'admin',
       name: '데이터 융합',
       method: 'POST',
-      path: '/api/v1/capitalflows/admin/fusion/',
+      path: '/admin/fusion/',
       description: '다중 소스 데이터를 ML 기반으로 융합합니다.',
       parameters: [
         { name: 'year_start', type: 'integer', required: false, description: '시작 연도', example: '2020' },
@@ -149,7 +149,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       examples: [
         {
           title: '전체 데이터 융합',
-          url: `${apiBaseUrl}/api/v1/capitalflows/admin/fusion/`,
+          url: `${apiBaseUrl}/admin/fusion/`,
           description: 'POST 요청으로 데이터 융합 실행'
         }
       ]
@@ -161,7 +161,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'admin',
       name: '데이터 검증',
       method: 'POST',
-      path: '/api/v1/capitalflows/admin/validate/',
+      path: '/admin/validate/',
       description: '처리된 데이터의 품질을 검증합니다.',
       parameters: [
         { name: 'year', type: 'integer', required: false, description: '검증할 연도', example: '2023' }
@@ -169,7 +169,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       examples: [
         {
           title: '2023년 데이터 검증',
-          url: `${apiBaseUrl}/api/v1/capitalflows/admin/validate/`,
+          url: `${apiBaseUrl}/admin/validate/`,
           description: 'POST 요청으로 2023년 데이터 검증'
         }
       ]
@@ -181,7 +181,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'admin',
       name: '처리 로그',
       method: 'GET',
-      path: '/api/v1/capitalflows/admin/logs/',
+      path: '/admin/logs/',
       description: '데이터 처리 로그를 조회합니다.',
       parameters: [
         { name: 'limit', type: 'integer', required: false, description: '조회할 로그 수', example: '50' },
@@ -190,7 +190,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       examples: [
         {
           title: '최근 로그 50개',
-          url: `${apiBaseUrl}/api/v1/capitalflows/admin/logs/?limit=50`,
+          url: `${apiBaseUrl}/admin/logs/?limit=50`,
           description: '최근 처리 로그 50개 조회'
         }
       ]
@@ -202,12 +202,12 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'pipeline',
       name: '파이프라인 개요',
       method: 'GET',
-      path: '/api/v1/capitalflows/pipeline/overview/',
+      path: '/pipeline/overview/',
       description: '데이터 파이프라인 전체 현황을 조회합니다.',
       examples: [
         {
           title: '파이프라인 현황',
-          url: `${apiBaseUrl}/api/v1/capitalflows/pipeline/overview/`,
+          url: `${apiBaseUrl}/pipeline/overview/`,
           description: '소스별 통계, 국가별 통계, 품질 분석'
         }
       ]
@@ -218,7 +218,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'pipeline',
       name: '원시 데이터',
       method: 'GET',
-      path: '/api/v1/capitalflows/pipeline/raw-data/',
+      path: '/pipeline/raw-data/',
       description: '원시 데이터 상세 정보를 조회합니다.',
       parameters: [
         { name: 'page_size', type: 'integer', required: false, description: '페이지 크기', example: '10' },
@@ -227,7 +227,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       examples: [
         {
           title: '원시 데이터 샘플',
-          url: `${apiBaseUrl}/api/v1/capitalflows/pipeline/raw-data/?page_size=10`,
+          url: `${apiBaseUrl}/pipeline/raw-data/?page_size=10`,
           description: '원시 데이터 10개 샘플 조회'
         }
       ]
@@ -238,7 +238,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'pipeline',
       name: '정제 데이터',
       method: 'GET',
-      path: '/api/v1/capitalflows/pipeline/processed-data/',
+      path: '/pipeline/processed-data/',
       description: '정제된 데이터 상세 정보를 조회합니다.',
       parameters: [
         { name: 'page_size', type: 'integer', required: false, description: '페이지 크기', example: '10' },
@@ -247,7 +247,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       examples: [
         {
           title: '정제 데이터 샘플',
-          url: `${apiBaseUrl}/api/v1/capitalflows/pipeline/processed-data/?page_size=10`,
+          url: `${apiBaseUrl}/pipeline/processed-data/?page_size=10`,
           description: '정제된 데이터 10개 샘플 조회'
         }
       ]
@@ -258,7 +258,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'pipeline',
       name: '데이터 추적성',
       method: 'GET',
-      path: '/api/v1/capitalflows/pipeline/traceability/',
+      path: '/pipeline/traceability/',
       description: '특정 데이터의 처리 과정을 추적합니다.',
       parameters: [
         { name: 'country', type: 'string', required: true, description: '국가 코드', example: 'CHN' },
@@ -269,7 +269,7 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       examples: [
         {
           title: '중국 AI FDI 추적',
-          url: `${apiBaseUrl}/api/v1/capitalflows/pipeline/traceability/?country=CHN&sector=AI&capital_type=FDI&year=2023`,
+          url: `${apiBaseUrl}/pipeline/traceability/?country=CHN&sector=AI&capital_type=FDI&year=2023`,
           description: '2023년 중국 AI 분야 FDI 데이터 처리 과정 추적'
         }
       ]
@@ -280,12 +280,12 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       category: 'pipeline',
       name: '품질 분석',
       method: 'GET',
-      path: '/api/v1/capitalflows/pipeline/quality-analysis/',
+      path: '/pipeline/quality-analysis/',
       description: '데이터 품질 분석 결과를 조회합니다.',
       examples: [
         {
           title: '품질 분석',
-          url: `${apiBaseUrl}/api/v1/capitalflows/pipeline/quality-analysis/`,
+          url: `${apiBaseUrl}/pipeline/quality-analysis/`,
           description: '소스별 품질, 융합 성능, 연도별 트렌드 분석'
         }
       ]

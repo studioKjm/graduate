@@ -76,7 +76,7 @@ export default function CountryQuickLinks({ apiBaseUrl }: CountryQuickLinksProps
       params.append('aggregate', 'true')
     }
     
-    return `${apiBaseUrl}/api/v1/capitalflows/capitalflows/?${params.toString()}`
+    return `${apiBaseUrl}/capitalflows/?${params.toString()}`
   }
 
   const openURL = (url: string) => {
@@ -213,7 +213,7 @@ export default function CountryQuickLinks({ apiBaseUrl }: CountryQuickLinksProps
             <p className="text-sm text-gray-600 mb-3">미국, 중국, 일본</p>
             <div className="space-y-2">
               <button
-                onClick={() => openURL(`${apiBaseUrl}/api/v1/capitalflows/capitalflows/?country=USA&country=CHN&country=JPN&sector=${selectedSector}&aggregate=true&year=2023`)}
+                onClick={() => openURL(`${apiBaseUrl}/capitalflows/?country=USA&country=CHN&country=JPN&sector=${selectedSector}&aggregate=true&year=2023`)}
                 className="w-full px-3 py-2 bg-purple-500 text-white rounded hover:bg-purple-600 text-sm"
               >
                 집계 비교
@@ -227,7 +227,7 @@ export default function CountryQuickLinks({ apiBaseUrl }: CountryQuickLinksProps
             <p className="text-sm text-gray-600 mb-3">중국, 일본, 한국, 인도</p>
             <div className="space-y-2">
               <button
-                onClick={() => openURL(`${apiBaseUrl}/api/v1/capitalflows/capitalflows/?country=CHN&country=JPN&country=KOR&country=IND&sector=${selectedSector}&aggregate=true&year=2023`)}
+                onClick={() => openURL(`${apiBaseUrl}/capitalflows/?country=CHN&country=JPN&country=KOR&country=IND&sector=${selectedSector}&aggregate=true&year=2023`)}
                 className="w-full px-3 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
               >
                 집계 비교
@@ -241,7 +241,7 @@ export default function CountryQuickLinks({ apiBaseUrl }: CountryQuickLinksProps
             <p className="text-sm text-gray-600 mb-3">독일, 영국, 프랑스</p>
             <div className="space-y-2">
               <button
-                onClick={() => openURL(`${apiBaseUrl}/api/v1/capitalflows/capitalflows/?country=DEU&country=GBR&country=FRA&sector=${selectedSector}&aggregate=true&year=2023`)}
+                onClick={() => openURL(`${apiBaseUrl}/capitalflows/?country=DEU&country=GBR&country=FRA&sector=${selectedSector}&aggregate=true&year=2023`)}
                 className="w-full px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
               >
                 집계 비교
@@ -259,7 +259,7 @@ export default function CountryQuickLinks({ apiBaseUrl }: CountryQuickLinksProps
           <div>
             <h4 className="font-medium text-gray-900 mb-2">모든 국가 데이터</h4>
             <button
-              onClick={() => openURL(`${apiBaseUrl}/api/v1/capitalflows/capitalflows/?ordering=country__code&page_size=1000`)}
+              onClick={() => openURL(`${apiBaseUrl}/capitalflows/?ordering=country__code&page_size=1000`)}
               className="w-full px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600"
             >
               전체 데이터 보기
@@ -269,7 +269,7 @@ export default function CountryQuickLinks({ apiBaseUrl }: CountryQuickLinksProps
           <div>
             <h4 className="font-medium text-gray-900 mb-2">메타데이터</h4>
             <button
-              onClick={() => openURL(`${apiBaseUrl}/api/v1/capitalflows/metadata/`)}
+              onClick={() => openURL(`${apiBaseUrl}/metadata/`)}
               className="w-full px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
             >
               국가/분야/자본타입 목록
