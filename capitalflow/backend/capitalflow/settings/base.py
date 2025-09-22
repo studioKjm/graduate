@@ -33,6 +33,7 @@ LOCAL_APPS = [
     'api',
     'core',
     'data_management',
+    'apps.data',  # 새로운 다층 검증 데이터 앱
     'visualization',
     'analytics',
 ]

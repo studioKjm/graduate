@@ -10,6 +10,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', include('api.urls')),
     path('api/v1/data/', include('data_management.urls')),
+    path('api/v1/capitalflows/', include('apps.data.urls')),  # 새로운 다층 검증 API
     path('api/v1/visualization/', include('visualization.urls')),
     path('api/v1/analytics/', include('analytics.urls')),
 ]

@@ -10,6 +10,7 @@ const navigation = [
   { name: '지도', href: '/map' },
   { name: '공지사항', href: '/notice' },
   { name: '소개', href: '/about' },
+  { name: '관리자', href: '/admin' },
 ]
 
 export default function Navbar() {

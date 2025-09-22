@@ -7,7 +7,7 @@ import MapLegend from '@/components/map/MapLegend'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
 // Dynamically import the map component to avoid SSR issues
-const MapVisualization = dynamic(() => import('@/components/map/StaticColorMap'), {
+const MapVisualization = dynamic(() => import('@/components/map/SectorBasedMap'), {
   loading: () => <LoadingSpinner />,
   ssr: false,
 })
@@ -16,7 +16,7 @@ export default function MapPage() {
   const [mapFilters, setMapFilters] = useState({
     year: 2023,
     sector: '',
-    capitalType: '',
+    capitalTypes: [] as string[],
     visualizationType: 'choropleth' as 'choropleth' | 'flow' | 'both'
   })
   const [isAnimating, setIsAnimating] = useState(false)
@@ -37,7 +37,7 @@ export default function MapPage() {
           <MapVisualization 
             year={mapFilters.year}
             sector={mapFilters.sector}
-            capitalType={mapFilters.capitalType}
+            capitalTypes={mapFilters.capitalTypes}
             visualizationType={mapFilters.visualizationType}
           />
         </div>
@@ -47,7 +47,7 @@ export default function MapPage() {
           <MapControls 
             onYearChange={(year) => handleFiltersChange({ year })}
             onSectorChange={(sector) => handleFiltersChange({ sector })}
-            onCapitalTypeChange={(capitalType) => handleFiltersChange({ capitalType })}
+            onCapitalTypeChange={(capitalTypes) => handleFiltersChange({ capitalTypes })}
             onVisualizationTypeChange={(visualizationType) => handleFiltersChange({ visualizationType })}
             onAnimationToggle={handleAnimationToggle}
           />
@@ -76,8 +76,17 @@ export default function MapPage() {
                 <span className="font-medium">분야:</span> {mapFilters.sector || '전체'}
               </div>
               <div>
-                <span className="font-medium">자본 타입:</span> {mapFilters.capitalType || '전체'}
+                <span className="font-medium">자본 타입:</span> {
+                  mapFilters.capitalTypes.length === 0 ? '선택 안함' : 
+                  mapFilters.capitalTypes.length === 1 ? mapFilters.capitalTypes[0] :
+                  `${mapFilters.capitalTypes.length}개 선택`
+                }
               </div>
+              {mapFilters.capitalTypes.length > 1 && (
+                <div className="text-xs text-gray-500 pl-4">
+                  {mapFilters.capitalTypes.join(', ')}
+                </div>
+              )}
               <div>
                 <span className="font-medium">시각화:</span> {
                   mapFilters.visualizationType === 'choropleth' ? '색상' :
