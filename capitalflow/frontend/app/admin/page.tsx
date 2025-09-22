@@ -6,6 +6,7 @@ import APITestPanel from '@/components/admin/APITestPanel'
 import AdminAuth from '@/components/admin/AdminAuth'
 import ToastContainer, { ToastMessage } from '@/components/admin/Toast'
 import DataPipelinePanel from '@/components/admin/DataPipelinePanel'
+import APIEndpointsPanel from '@/components/admin/APIEndpointsPanel'
 
 interface DataSource {
   id: string
@@ -290,13 +291,14 @@ export default function AdminPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8">
-            {[
-              { id: 'overview', name: '시스템 개요' },
-              { id: 'pipeline', name: '데이터 파이프라인' },
-              { id: 'api-test', name: 'API 테스트' },
-              { id: 'logs', name: '처리 로그' },
-              { id: 'sources', name: '데이터 소스' }
-            ].map((tab) => (
+              {[
+                { id: 'overview', name: '시스템 개요' },
+                { id: 'pipeline', name: '데이터 파이프라인' },
+                { id: 'api-endpoints', name: 'API 엔드포인트' },
+                { id: 'api-test', name: 'API 테스트' },
+                { id: 'logs', name: '처리 로그' },
+                { id: 'sources', name: '데이터 소스' }
+              ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
@@ -453,11 +455,17 @@ export default function AdminPage() {
         )}
 
         {/* 데이터 파이프라인 탭 */}
-        {activeTab === 'pipeline' && (
-          <div className="space-y-6">
-            <DataPipelinePanel apiBaseUrl={API_BASE_URL} />
-          </div>
-        )}
+          {activeTab === 'pipeline' && (
+            <div className="space-y-6">
+              <DataPipelinePanel apiBaseUrl={API_BASE_URL} />
+            </div>
+          )}
+
+          {activeTab === 'api-endpoints' && (
+            <div className="space-y-6">
+              <APIEndpointsPanel apiBaseUrl={API_BASE_URL} />
+            </div>
+          )}
 
         {/* API 테스트 탭 */}
         {activeTab === 'api-test' && (
