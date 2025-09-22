@@ -141,6 +141,9 @@ export default function CountryQuickLinks({ apiBaseUrl }: CountryQuickLinksProps
             <strong>현재 설정:</strong> {sectors.find(s => s.code === selectedSector)?.name} 분야, {' '}
             {selectedCapitalType === 'ALL' ? '전체 자본타입' : capitalTypes.find(c => c.code === selectedCapitalType)?.name} (2023년)
           </p>
+          <p className="text-xs text-blue-600 mt-1">
+            💡 팁: 버튼을 클릭하면 새 탭에서 API 결과를 확인할 수 있습니다.
+          </p>
         </div>
       </div>
 

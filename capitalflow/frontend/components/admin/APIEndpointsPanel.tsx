@@ -353,9 +353,18 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       {/* 헤더 */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">🔗 API 엔드포인트 관리</h2>
-        <p className="text-gray-600">
+        <p className="text-gray-600 mb-3">
           모든 API 엔드포인트를 체계적으로 관리하고 테스트할 수 있습니다.
         </p>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <h3 className="text-sm font-semibold text-blue-800 mb-2">💡 사용 방법</h3>
+          <ul className="text-xs text-blue-700 space-y-1">
+            <li>• <strong>🔗 버튼</strong>: API를 새 탭에서 바로 열기</li>
+            <li>• <strong>URL 클릭</strong>: 경로나 예제 URL을 클릭하여 새 탭에서 열기</li>
+            <li>• <strong>테스트 버튼</strong>: 현재 페이지에서 API 응답 확인</li>
+            <li>• <strong>복사 버튼</strong>: URL을 클립보드에 복사</li>
+          </ul>
+        </div>
       </div>
 
       {/* 필터 및 검색 */}
@@ -415,12 +424,31 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
               >
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="font-medium text-gray-900">{endpoint.name}</h4>
-                  <span className={`px-2 py-1 rounded text-xs font-semibold ${getMethodColor(endpoint.method)}`}>
-                    {endpoint.method}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        window.open(`${apiBaseUrl}${endpoint.path}`, '_blank')
+                      }}
+                      className="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-xs"
+                      title="새 탭에서 열기"
+                    >
+                      🔗
+                    </button>
+                    <span className={`px-2 py-1 rounded text-xs font-semibold ${getMethodColor(endpoint.method)}`}>
+                      {endpoint.method}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-sm text-gray-600 mb-2">{endpoint.description}</p>
-                <code className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-800">
+                <code 
+                  className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-800 cursor-pointer hover:bg-blue-100 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    window.open(`${apiBaseUrl}${endpoint.path}`, '_blank')
+                  }}
+                  title="클릭하여 새 탭에서 열기"
+                >
                   {endpoint.path}
                 </code>
               </div>
@@ -445,11 +473,21 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">경로</label>
                 <div className="flex items-center gap-2">
-                  <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm text-gray-800">
+                  <code 
+                    className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm text-gray-800 cursor-pointer hover:bg-blue-50 transition-colors"
+                    onClick={() => window.open(`${apiBaseUrl}${selectedEndpoint.path}`, '_blank')}
+                    title="클릭하여 새 탭에서 열기"
+                  >
                     {selectedEndpoint.path}
                   </code>
                   <button
-                    onClick={() => copyToClipboard(selectedEndpoint.path)}
+                    onClick={() => window.open(`${apiBaseUrl}${selectedEndpoint.path}`, '_blank')}
+                    className="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+                  >
+                    🔗 열기
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(`${apiBaseUrl}${selectedEndpoint.path}`)}
                     className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
                   >
                     복사
@@ -491,17 +529,29 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
                     <div key={index} className="border border-gray-200 rounded p-3">
                       <div className="flex items-center justify-between mb-2">
                         <h5 className="font-medium text-gray-900">{example.title}</h5>
-                        <button
-                          onClick={() => testAPI(example.url)}
-                          disabled={isLoading}
-                          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm disabled:opacity-50"
-                        >
-                          {isLoading ? '테스트 중...' : '테스트'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => window.open(example.url, '_blank')}
+                            className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
+                          >
+                            🔗 열기
+                          </button>
+                          <button
+                            onClick={() => testAPI(example.url)}
+                            disabled={isLoading}
+                            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm disabled:opacity-50"
+                          >
+                            {isLoading ? '테스트 중...' : '테스트'}
+                          </button>
+                        </div>
                       </div>
                       <p className="text-sm text-gray-600 mb-2">{example.description}</p>
                       <div className="flex items-center gap-2">
-                        <code className="flex-1 bg-gray-50 px-2 py-1 rounded text-xs text-gray-800 break-all">
+                        <code 
+                          className="flex-1 bg-gray-50 px-2 py-1 rounded text-xs text-gray-800 break-all cursor-pointer hover:bg-blue-50"
+                          onClick={() => window.open(example.url, '_blank')}
+                          title="클릭하여 새 탭에서 열기"
+                        >
                           {example.url}
                         </code>
                         <button
