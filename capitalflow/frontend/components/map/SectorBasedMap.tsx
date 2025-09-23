@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 
 interface SectorBasedMapProps {
   year?: number
@@ -21,7 +20,6 @@ export default function SectorBasedMap({
   const [hoveredCountry, setHoveredCountry] = useState<any>(null)
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isMounted, setIsMounted] = useState(false)
-  const [isLegendCollapsed, setIsLegendCollapsed] = useState(false)
 
   // API 데이터 호출 함수
   const fetchCapitalFlowData = async (sector: string, capitalTypes: string[], year: number) => {
@@ -542,51 +540,6 @@ export default function SectorBasedMap({
         </p>
       </div>
       
-      {/* 범례 - 접을 수 있음 */}
-      <div className="absolute bottom-4 left-4 bg-white bg-opacity-95 rounded-lg shadow-lg">
-        <div className="flex items-center justify-between p-3 pb-2">
-          <h4 className="font-semibold text-gray-900 text-sm">{currentSectorInfo.name} 분야 투자 강도</h4>
-          <button
-            onClick={() => setIsLegendCollapsed(!isLegendCollapsed)}
-            className="p-1 rounded text-gray-400 hover:text-gray-600 transition-colors"
-            title={isLegendCollapsed ? "범례 펼치기" : "범례 접기"}
-          >
-            {isLegendCollapsed ? (
-              <ChevronUpIcon className="h-4 w-4" />
-            ) : (
-              <ChevronDownIcon className="h-4 w-4" />
-            )}
-          </button>
-        </div>
-        
-        {!isLegendCollapsed && (
-          <div className="px-3 pb-3">
-            <div className="space-y-2">
-              {[1.0, 0.8, 0.6, 0.4, 0.2].map((intensity, index) => (
-                <div key={intensity} className="flex items-center gap-2">
-                  <div 
-                    className="w-4 h-4 rounded border" 
-                    style={{ backgroundColor: getFillColor(intensity, sector) }}
-                  ></div>
-                  <span className="text-sm">
-                    {intensity === 1.0 ? '최고' :
-                     intensity === 0.8 ? '높음' :
-                     intensity === 0.6 ? '보통' :
-                     intensity === 0.4 ? '낮음' : '최소'}
-                  </span>
-                </div>
-              ))}
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded border bg-gray-100"></div>
-                <span className="text-sm">데이터 없음</span>
-              </div>
-            </div>
-            <div className="mt-3 pt-2 border-t border-gray-200 text-xs text-gray-500">
-              <p>같은 분야 내에서 국가별 자본 총액에 따른 색상 농도</p>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   )
 }

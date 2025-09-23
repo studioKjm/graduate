@@ -1,6 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import { interpolateBlues } from 'd3-scale-chromatic'
+import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 
 interface MapLegendProps {
   visualizationType?: 'choropleth' | 'flow' | 'both'
@@ -13,6 +15,7 @@ export default function MapLegend({
   maxValue = 1000000,
   minValue = 0
 }: MapLegendProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false)
   // 색상 그라디언트 생성
   const colorStops = Array.from({ length: 9 }, (_, i) => {
     const intensity = i / 8
@@ -34,8 +37,24 @@ export default function MapLegend({
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-4 min-w-64">
-      <h4 className="text-sm font-semibold text-gray-900 mb-3">범례</h4>
+    <div className="bg-white rounded-lg shadow-lg border border-gray-200 min-w-64">
+      <div className="flex items-center justify-between p-3 pb-2">
+        <h4 className="text-sm font-semibold text-gray-900">범례</h4>
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="p-1 rounded text-gray-400 hover:text-gray-600 transition-colors"
+          title={isCollapsed ? "범례 펼치기" : "범례 접기"}
+        >
+          {isCollapsed ? (
+            <ChevronUpIcon className="h-4 w-4" />
+          ) : (
+            <ChevronDownIcon className="h-4 w-4" />
+          )}
+        </button>
+      </div>
+      
+      {!isCollapsed && (
+        <div className="px-3 pb-3">
       
       {(visualizationType === 'choropleth' || visualizationType === 'both') && (
         <div className="mb-4">
@@ -124,10 +143,12 @@ export default function MapLegend({
         </div>
       )}
       
-      {/* 추가 정보 */}
-      <div className="mt-4 pt-3 border-t border-gray-200 text-xs text-gray-500">
-        <p>지도를 클릭하거나 마우스를 올려 상세 정보를 확인하세요.</p>
-      </div>
+          {/* 추가 정보 */}
+          <div className="mt-4 pt-3 border-t border-gray-200 text-xs text-gray-500">
+            <p>지도를 클릭하거나 마우스를 올려 상세 정보를 확인하세요.</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
