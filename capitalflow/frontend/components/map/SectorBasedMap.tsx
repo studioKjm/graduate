@@ -231,9 +231,9 @@ export default function SectorBasedMap({
         })
         
         console.log('Sample enriched features:', enrichedFeatures
-          .filter(f => f.properties.capital_amount > 0)
+          .filter((f: any) => f.properties.capital_amount > 0)
           .slice(0, 5)
-          .map(f => ({
+          .map((f: any) => ({
             name: f.properties.country_name,
             code: f.properties.country_code,
             amount: f.properties.capital_amount,
