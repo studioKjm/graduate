@@ -31,7 +31,7 @@ export default function MapControls({
   const [isAnimating, setIsAnimating] = useState(false)
   const [isExpanded, setIsExpanded] = useState(true)
 
-  // 임시 데이터 (추후 API에서 가져올 예정)
+  // 백엔드 메타데이터와 동기화된 분야 목록
   const sectors = [
     { id: '', name: '전체' },
     { id: 'AI', name: '인공지능' },
@@ -39,6 +39,11 @@ export default function MapControls({
     { id: 'BIO', name: '바이오' },
     { id: 'ENERGY', name: '에너지' },
     { id: 'FINTECH', name: '핀테크' },
+    { id: 'AUTOMOTIVE', name: '자동차' },
+    { id: 'AEROSPACE', name: '항공우주' },
+    { id: 'TELECOM', name: '통신' },
+    { id: 'REALESTATE', name: '부동산' },
+    { id: 'AGRICULTURE', name: '농업' },
   ]
 
   const capitalTypes = [
@@ -58,6 +63,14 @@ export default function MapControls({
   const handleYearChange = (year: number) => {
     setCurrentYear(year)
     onYearChange?.(year)
+  }
+
+  // 연도 슬라이더 마우스 휠 스크롤 핸들러
+  const handleYearWheelScroll = (event: React.WheelEvent) => {
+    event.preventDefault()
+    const delta = event.deltaY < 0 ? 1 : -1 // 스크롤 내릴 때 미래로 (감도 낮게)
+    const newYear = Math.max(1970, Math.min(2024, currentYear + delta))
+    handleYearChange(newYear)
   }
 
   const handleSectorChange = (sector: string) => {
@@ -114,7 +127,9 @@ export default function MapControls({
                 step="1"
                 value={currentYear}
                 onChange={(e) => handleYearChange(parseInt(e.target.value))}
+                onWheel={handleYearWheelScroll}
                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                title="마우스 휠로 연도를 변경할 수 있습니다"
               />
               <div className="flex justify-between text-xs text-gray-500">
                 <span>1970</span>
@@ -177,23 +192,26 @@ export default function MapControls({
               )}
             </label>
             
-            {/* 선택된 타입들 표시 */}
+            {/* 선택된 타입들 표시 - 하단 정렬 */}
             {selectedCapitalTypes.length > 0 && (
-              <div className="mb-3 p-2 bg-primary-50 rounded-md">
-                <div className="text-xs text-primary-700 font-medium mb-1">선택된 자본 타입:</div>
-                <div className="flex flex-wrap gap-1">
+              <div className="mb-3 p-3 bg-primary-50 rounded-md">
+                <div className="text-xs text-primary-700 font-medium mb-2">
+                  선택된 자본 타입 ({selectedCapitalTypes.length}개):
+                </div>
+                <div className="grid grid-cols-1 gap-1">
                   {selectedCapitalTypes.map(typeId => {
                     const type = capitalTypes.find(t => t.id === typeId)
                     return (
-                      <span key={typeId} className="inline-flex items-center px-2 py-1 rounded text-xs bg-primary-100 text-primary-800">
-                        {type?.name}
+                      <div key={typeId} className="flex items-center justify-between px-2 py-1 rounded text-xs bg-primary-100 text-primary-800">
+                        <span className="flex-1 truncate">{type?.name}</span>
                         <button
                           onClick={() => handleCapitalTypeChange(typeId)}
-                          className="ml-1 hover:text-primary-600"
+                          className="ml-2 hover:text-primary-600 flex-shrink-0"
+                          title="제거"
                         >
                           ×
                         </button>
-                      </span>
+                      </div>
                     )
                   })}
                 </div>

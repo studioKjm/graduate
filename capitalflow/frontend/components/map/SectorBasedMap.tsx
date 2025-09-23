@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 
 interface SectorBasedMapProps {
   year?: number
@@ -20,6 +21,7 @@ export default function SectorBasedMap({
   const [hoveredCountry, setHoveredCountry] = useState<any>(null)
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isMounted, setIsMounted] = useState(false)
+  const [isLegendCollapsed, setIsLegendCollapsed] = useState(false)
 
   // API 데이터 호출 함수
   const fetchCapitalFlowData = async (sector: string, capitalTypes: string[], year: number) => {
@@ -81,6 +83,10 @@ export default function SectorBasedMap({
     'ENERGY': { name: '에너지', baseColor: [234, 179, 8] },   // 노란색
     'FINTECH': { name: '핀테크', baseColor: [239, 68, 68] },  // 빨간색
     'AUTOMOTIVE': { name: '자동차', baseColor: [20, 184, 166] }, // 청록색
+    'AEROSPACE': { name: '항공우주', baseColor: [99, 102, 241] }, // 인디고
+    'TELECOM': { name: '통신', baseColor: [236, 72, 153] },   // 핑크
+    'REALESTATE': { name: '부동산', baseColor: [139, 69, 19] }, // 갈색
+    'AGRICULTURE': { name: '농업', baseColor: [34, 139, 34] }, // 진한 녹색
   }
 
   // 지도 데이터 로드
@@ -345,6 +351,46 @@ export default function SectorBasedMap({
       return '#fca5a5' // 매우 연한 빨강
     }
     
+    if (sector === 'AUTOMOTIVE') {
+      if (intensity >= 0.8) return '#0f766e' // 매우 진한 청록
+      if (intensity >= 0.6) return '#0d9488' // 진한 청록
+      if (intensity >= 0.4) return '#14b8a6' // 청록
+      if (intensity >= 0.2) return '#5eead4' // 연한 청록
+      return '#a7f3d0' // 매우 연한 청록
+    }
+    
+    if (sector === 'AEROSPACE') {
+      if (intensity >= 0.8) return '#3730a3' // 매우 진한 인디고
+      if (intensity >= 0.6) return '#4338ca' // 진한 인디고
+      if (intensity >= 0.4) return '#6366f1' // 인디고
+      if (intensity >= 0.2) return '#a5b4fc' // 연한 인디고
+      return '#c7d2fe' // 매우 연한 인디고
+    }
+    
+    if (sector === 'TELECOM') {
+      if (intensity >= 0.8) return '#be185d' // 매우 진한 핑크
+      if (intensity >= 0.6) return '#db2777' // 진한 핑크
+      if (intensity >= 0.4) return '#ec4899' // 핑크
+      if (intensity >= 0.2) return '#f9a8d4' // 연한 핑크
+      return '#fce7f3' // 매우 연한 핑크
+    }
+    
+    if (sector === 'REALESTATE') {
+      if (intensity >= 0.8) return '#78350f' // 매우 진한 갈색
+      if (intensity >= 0.6) return '#92400e' // 진한 갈색
+      if (intensity >= 0.4) return '#d97706' // 갈색
+      if (intensity >= 0.2) return '#fbbf24' // 연한 갈색
+      return '#fef3c7' // 매우 연한 갈색
+    }
+    
+    if (sector === 'AGRICULTURE') {
+      if (intensity >= 0.8) return '#14532d' // 매우 진한 농업녹색
+      if (intensity >= 0.6) return '#166534' // 진한 농업녹색
+      if (intensity >= 0.4) return '#22c55e' // 농업녹색
+      if (intensity >= 0.2) return '#86efac' // 연한 농업녹색
+      return '#dcfce7' // 매우 연한 농업녹색
+    }
+    
     // 기본값 (파란색)
     if (intensity >= 0.8) return '#1e40af'
     if (intensity >= 0.6) return '#3b82f6'
@@ -496,32 +542,50 @@ export default function SectorBasedMap({
         </p>
       </div>
       
-      {/* 범례 */}
-      <div className="absolute bottom-4 left-4 bg-white bg-opacity-95 rounded-lg p-4 shadow-lg">
-        <h4 className="font-semibold text-gray-900 mb-3">{currentSectorInfo.name} 분야 투자 강도</h4>
-        <div className="space-y-2">
-          {[1.0, 0.8, 0.6, 0.4, 0.2].map((intensity, index) => (
-            <div key={intensity} className="flex items-center gap-2">
-              <div 
-                className="w-4 h-4 rounded border" 
-                style={{ backgroundColor: getFillColor(intensity, sector) }}
-              ></div>
-              <span className="text-sm">
-                {intensity === 1.0 ? '최고' :
-                 intensity === 0.8 ? '높음' :
-                 intensity === 0.6 ? '보통' :
-                 intensity === 0.4 ? '낮음' : '최소'}
-              </span>
+      {/* 범례 - 접을 수 있음 */}
+      <div className="absolute bottom-4 left-4 bg-white bg-opacity-95 rounded-lg shadow-lg">
+        <div className="flex items-center justify-between p-3 pb-2">
+          <h4 className="font-semibold text-gray-900 text-sm">{currentSectorInfo.name} 분야 투자 강도</h4>
+          <button
+            onClick={() => setIsLegendCollapsed(!isLegendCollapsed)}
+            className="p-1 rounded text-gray-400 hover:text-gray-600 transition-colors"
+            title={isLegendCollapsed ? "범례 펼치기" : "범례 접기"}
+          >
+            {isLegendCollapsed ? (
+              <ChevronUpIcon className="h-4 w-4" />
+            ) : (
+              <ChevronDownIcon className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+        
+        {!isLegendCollapsed && (
+          <div className="px-3 pb-3">
+            <div className="space-y-2">
+              {[1.0, 0.8, 0.6, 0.4, 0.2].map((intensity, index) => (
+                <div key={intensity} className="flex items-center gap-2">
+                  <div 
+                    className="w-4 h-4 rounded border" 
+                    style={{ backgroundColor: getFillColor(intensity, sector) }}
+                  ></div>
+                  <span className="text-sm">
+                    {intensity === 1.0 ? '최고' :
+                     intensity === 0.8 ? '높음' :
+                     intensity === 0.6 ? '보통' :
+                     intensity === 0.4 ? '낮음' : '최소'}
+                  </span>
+                </div>
+              ))}
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded border bg-gray-100"></div>
+                <span className="text-sm">데이터 없음</span>
+              </div>
             </div>
-          ))}
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded border bg-gray-100"></div>
-            <span className="text-sm">데이터 없음</span>
+            <div className="mt-3 pt-2 border-t border-gray-200 text-xs text-gray-500">
+              <p>같은 분야 내에서 국가별 자본 총액에 따른 색상 농도</p>
+            </div>
           </div>
-        </div>
-        <div className="mt-3 pt-2 border-t border-gray-200 text-xs text-gray-500">
-          <p>같은 분야 내에서 국가별 자본 총액에 따른 색상 농도</p>
-        </div>
+        )}
       </div>
     </div>
   )
