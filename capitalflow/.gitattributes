@@ -1,0 +1,28 @@
+# Git attributes file for consistent handling
+
+# Ensure important files are always tracked
+backend/apps/**/*.py text
+frontend/**/*.tsx text
+frontend/**/*.ts text
+*.md text
+
+# Force tracking of critical directories
+backend/apps/ -ignore
+frontend/components/ -ignore
+frontend/app/ -ignore
+
+# Line ending settings
+*.py text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary

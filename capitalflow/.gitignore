@@ -90,9 +90,11 @@ dmypy.json
 *.key
 *.crt
 
-# Data files
+# Data files (specific paths only)
 *.csv
 *.json
 *.xlsx
-data/
-dumps/
+/data/
+/dumps/
+!/backend/apps/data/
+!/frontend/data/
