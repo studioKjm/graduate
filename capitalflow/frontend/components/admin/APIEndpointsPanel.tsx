@@ -226,9 +226,24 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
       ],
       examples: [
         {
+          title: '빠른 통계',
+          url: `${apiBaseUrl}/pipeline/raw-data/?quick=true`,
+          description: '원시 데이터 총 개수만 빠르게 확인'
+        },
+        {
           title: '원시 데이터 샘플',
           url: `${apiBaseUrl}/pipeline/raw-data/?page_size=10`,
           description: '원시 데이터 10개 샘플 조회'
+        },
+        {
+          title: '특정 소스 데이터',
+          url: `${apiBaseUrl}/pipeline/raw-data/?source=IMF&page_size=5`,
+          description: 'IMF 소스의 원시 데이터 5개 조회'
+        },
+        {
+          title: '중국 AI 데이터',
+          url: `${apiBaseUrl}/pipeline/raw-data/?country=CHN&sector=AI&page_size=5`,
+          description: '중국 AI 분야 원시 데이터 5개 조회'
         }
       ]
     },
@@ -271,6 +286,16 @@ export default function APIEndpointsPanel({ apiBaseUrl }: APIEndpointsPanelProps
           title: '중국 AI FDI 추적',
           url: `${apiBaseUrl}/pipeline/traceability/?country=CHN&sector=AI&capital_type=FDI&year=2023`,
           description: '2023년 중국 AI 분야 FDI 데이터 처리 과정 추적'
+        },
+        {
+          title: '미국 반도체 VC 추적',
+          url: `${apiBaseUrl}/pipeline/traceability/?country=USA&sector=SEMICONDUCTOR&capital_type=VC&year=2023`,
+          description: '2023년 미국 반도체 분야 VC 데이터 처리 과정 추적'
+        },
+        {
+          title: 'UAE 에너지 M&A 추적',
+          url: `${apiBaseUrl}/pipeline/traceability/?country=ARE&sector=ENERGY&capital_type=MA&year=2023`,
+          description: '2023년 UAE 에너지 분야 M&A 데이터 처리 과정 추적'
         }
       ]
     },
