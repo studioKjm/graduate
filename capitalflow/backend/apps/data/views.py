@@ -335,3 +335,26 @@ class ProcessingLogsAPIView(APIView):
                 'success': False,
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class MetadataAPIView(APIView):
+    """메타데이터 API"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        try:
+            countries = Country.objects.filter(is_active=True)
+            sectors = Sector.objects.filter(is_active=True)
+            capital_types = CapitalType.objects.filter(is_active=True)
+            
+            return Response({
+                'countries': [{'code': c.code, 'name': c.name} for c in countries],
+                'sectors': [{'code': s.code, 'name': s.name} for s in sectors],
+                'capital_types': [{'code': ct.code, 'name': ct.name} for ct in capital_types]
+            })
+            
+        except Exception as e:
+            logger.error(f"Metadata API error: {e}")
+            return Response({
+                'error': 'Internal server error',
+                'details': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

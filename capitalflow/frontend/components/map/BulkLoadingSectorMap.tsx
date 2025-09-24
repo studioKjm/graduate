@@ -38,26 +38,31 @@ export default function BulkLoadingSectorMap({
     let processedYears = 0
 
     try {
-      // 배치로 연도별 데이터 로딩 (5년씩)
-      for (let startYear = 1970; startYear <= 2024; startYear += 5) {
-        const endYear = Math.min(startYear + 4, 2024)
+      // 배치로 연도별 데이터 로딩 (8개씩으로 증가)
+      for (let startYear = 1970; startYear <= 2024; startYear += 8) {
+        const endYear = Math.min(startYear + 7, 2024)
         const promises = []
 
         for (let y = startYear; y <= endYear; y++) {
           promises.push(fetchYearData(sector, capitalTypes, y))
         }
 
-        const results = await Promise.all(promises)
+        const results = await Promise.allSettled(promises)
         
-        results.forEach((data, index) => {
+        results.forEach((result, index) => {
           const currentYear = startYear + index
-          yearlyData[currentYear] = data
+          if (result.status === 'fulfilled') {
+            yearlyData[currentYear] = result.value
+          } else {
+            console.warn(`Failed year ${currentYear}, using empty data`)
+            yearlyData[currentYear] = {}
+          }
           processedYears++
           setLoadingProgress((processedYears / totalYears) * 100)
         })
 
-        // UI 업데이트를 위한 작은 지연
-        await new Promise(resolve => setTimeout(resolve, 50))
+        // UI 업데이트를 위한 작은 지연 (단축)
+        await new Promise(resolve => setTimeout(resolve, 25))
       }
 
       console.log('✅ Bulk loading completed!', Object.keys(yearlyData).length, 'years loaded')
@@ -79,10 +84,24 @@ export default function BulkLoadingSectorMap({
       }
       params.append('aggregate', 'true')
       
-      const response = await fetch(`http://localhost:8001/api/v1/capitalflows/capitalflows/?${params}`)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 2000) // 2초 타임아웃
+      
+      const response = await fetch(
+        `http://localhost:8001/api/v1/capitalflows/capitalflows/?${params}`,
+        { 
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+      
+      clearTimeout(timeoutId)
       
       if (!response.ok) {
-        return {}
+        throw new Error(`HTTP ${response.status}`)
       }
 
       const data = await response.json()
@@ -90,15 +109,19 @@ export default function BulkLoadingSectorMap({
       
       if (data.results && Array.isArray(data.results)) {
         data.results.forEach((item: any) => {
-          if (item.country_code && item.total_amount) {
+          if (item.country_code && item.total_amount !== undefined) {
             processedData[item.country_code] = parseFloat(item.total_amount) || 0
           }
         })
       }
       
       return processedData
-    } catch (error) {
-      console.warn(`Failed to load data for ${year}:`, error)
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.warn(`⏱️ Timeout for year ${year}`)
+      } else {
+        console.warn(`⚠️ Error loading year ${year}:`, error.message)
+      }
       return {}
     }
   }

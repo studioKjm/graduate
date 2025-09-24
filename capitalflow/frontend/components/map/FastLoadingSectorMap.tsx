@@ -86,24 +86,27 @@ export default function FastLoadingSectorMap({
       }
       params.append('aggregate', 'true')
       
-      const response = await fetch(
-        `http://localhost:8001/api/v1/capitalflows/capitalflows/?${params}`,
-        { 
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
+      const url = `http://localhost:8001/api/v1/capitalflows/capitalflows/?${params}`
+      console.log(`🔍 Fetching: ${url}`)
+      
+      const response = await fetch(url, { 
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
         }
-      )
+      })
       
       clearTimeout(timeoutId)
       
       if (!response.ok) {
+        console.error(`❌ HTTP ${response.status} for year ${year}`)
         throw new Error(`HTTP ${response.status}`)
       }
 
       const data = await response.json()
+      console.log(`📊 Year ${year} response:`, data.count, 'countries')
+      
       const processedData: { [countryCode: string]: number } = {}
       
       if (data.results && Array.isArray(data.results)) {
@@ -112,15 +115,18 @@ export default function FastLoadingSectorMap({
             processedData[item.country_code] = parseFloat(item.total_amount) || 0
           }
         })
+        console.log(`✅ Year ${year} processed:`, Object.keys(processedData).length, 'countries')
+      } else {
+        console.warn(`⚠️ Year ${year}: No valid results`)
       }
       
       return processedData
-    } catch (error) {
+    } catch (error: any) {
       clearTimeout(timeoutId)
       if (error.name === 'AbortError') {
         console.warn(`⏱️ Timeout for year ${year}`)
       } else {
-        console.warn(`⚠️ Error loading ${year}:`, error.message)
+        console.error(`❌ Error loading ${year}:`, error.message)
       }
       return {}
     }
@@ -128,12 +134,20 @@ export default function FastLoadingSectorMap({
 
   // 현재 연도의 맵 데이터 생성 (메모이제이션)
   const currentMapData = useMemo(() => {
+    console.log(`🗺️ Creating map data for year ${year}`)
+    console.log('Available years:', Object.keys(allYearlyData))
+    console.log('Map data exists:', !!mapData)
+    
     if (!mapData || !allYearlyData[year]) {
+      console.warn(`❌ Missing data - mapData: ${!!mapData}, yearData: ${!!allYearlyData[year]}`)
       return null
     }
 
     const currentYearData = allYearlyData[year]
+    console.log(`📊 Year ${year} data:`, Object.keys(currentYearData).length, 'countries')
+    
     const maxCapital = Math.max(...Object.values(currentYearData), 1)
+    console.log(`💰 Max capital for ${year}: $${maxCapital.toLocaleString()}`)
 
     const enrichedFeatures = mapData.features.map((feature: any) => {
       const countryCode = feature.id
@@ -155,6 +169,7 @@ export default function FastLoadingSectorMap({
       }
     })
 
+    console.log(`🎨 Enhanced ${enrichedFeatures.length} features`)
     return {
       type: 'FeatureCollection',
       features: enrichedFeatures
