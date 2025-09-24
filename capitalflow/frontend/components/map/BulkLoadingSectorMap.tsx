@@ -304,13 +304,6 @@ export default function BulkLoadingSectorMap({
 
   return (
     <div className="w-full h-full relative bg-blue-50">
-      {/* 로딩 완료 알림 */}
-      {Object.keys(allYearlyData).length > 0 && (
-        <div className="absolute top-4 right-4 z-20 bg-green-100 border border-green-400 text-green-700 px-4 py-2 rounded-lg shadow-md">
-          <div className="text-sm font-medium">⚡ 즉시 반응 모드</div>
-          <div className="text-xs">{Object.keys(allYearlyData).length}년치 데이터 로딩 완료</div>
-        </div>
-      )}
 
       {/* SVG 지도 */}
       <svg

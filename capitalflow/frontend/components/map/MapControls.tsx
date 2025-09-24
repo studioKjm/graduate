@@ -174,9 +174,6 @@ export default function MapControls({
             <label className="block text-sm font-medium text-gray-700 mb-3">
               <CalendarIcon className="h-4 w-4 inline mr-1" />
               연도: {currentYear}
-              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-700">
-                ⚡ 감도 낮춤
-              </span>
             </label>
             
             {/* 연도 범위 설정 */}
@@ -258,7 +255,6 @@ export default function MapControls({
               />
               <div className="flex justify-between text-xs text-gray-500">
                 <span>{yearRangeMin}</span>
-                <span className="text-green-600 font-medium">🎯 정밀 조작</span>
                 <span>{yearRangeMax}</span>
               </div>
             </div>
