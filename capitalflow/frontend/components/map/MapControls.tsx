@@ -60,9 +60,10 @@ export default function MapControls({
     { id: 'DEVFIN', name: 'DevFin (개발금융)', description: '세계은행, ADB, ODA 같은 개발 자금' },
   ]
 
+  // 즉시 반응하는 연도 변경 핸들러
   const handleYearChange = (year: number) => {
     setCurrentYear(year)
-    onYearChange?.(year)
+    onYearChange?.(year) // 디바운싱 제거 - 즉시 반응
   }
 
   // 연도 슬라이더 마우스 휠 스크롤 핸들러
@@ -118,6 +119,9 @@ export default function MapControls({
             <label className="block text-sm font-medium text-gray-700 mb-2">
               <CalendarIcon className="h-4 w-4 inline mr-1" />
               연도: {currentYear}
+              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-700">
+                ⚡ 즉시 반응
+              </span>
             </label>
             <div className="space-y-2">
               <input
@@ -128,11 +132,15 @@ export default function MapControls({
                 value={currentYear}
                 onChange={(e) => handleYearChange(parseInt(e.target.value))}
                 onWheel={handleYearWheelScroll}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                title="마우스 휠로 연도를 변경할 수 있습니다"
+                className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer slider transition-all duration-100 hover:bg-gray-300 focus:ring-2 focus:ring-green-500 focus:outline-none"
+                style={{
+                  background: `linear-gradient(to right, #10b981 0%, #10b981 ${((currentYear - 1970) / (2024 - 1970)) * 100}%, #e5e7eb ${((currentYear - 1970) / (2024 - 1970)) * 100}%, #e5e7eb 100%)`
+                }}
+                title="연도를 드래그하거나 마우스 휠로 변경하세요. 모든 데이터가 미리 로드되어 즉시 반응합니다!"
               />
               <div className="flex justify-between text-xs text-gray-500">
                 <span>1970</span>
+                <span className="text-green-600 font-medium">🚀 빠른 반응</span>
                 <span>2024</span>
               </div>
             </div>

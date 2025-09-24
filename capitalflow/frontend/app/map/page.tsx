@@ -6,8 +6,8 @@ import MapControls from '@/components/map/MapControls'
 import MapLegend from '@/components/map/MapLegend'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
-// Dynamically import the map component to avoid SSR issues
-const MapVisualization = dynamic(() => import('@/components/map/SectorBasedMap'), {
+// Dynamically import the bulk loading map component for instant year switching
+const MapVisualization = dynamic(() => import('@/components/map/BulkLoadingSectorMap'), {
   loading: () => <LoadingSpinner />,
   ssr: false,
 })

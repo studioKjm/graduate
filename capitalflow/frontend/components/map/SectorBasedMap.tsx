@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
 
 interface SectorBasedMapProps {
   year?: number
@@ -20,9 +20,30 @@ export default function SectorBasedMap({
   const [hoveredCountry, setHoveredCountry] = useState<any>(null)
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isMounted, setIsMounted] = useState(false)
+  
+  // 간단한 캐싱 시스템
+  const geoDataCache = useRef<any>(null)
+  const apiDataCache = useRef<Map<string, any>>(new Map())
+  const lastUpdateRef = useRef<number>(0)
 
-  // API 데이터 호출 함수
+  // 캐시 키 생성
+  const getCacheKey = (sector: string, capitalTypes: string[], year: number) => {
+    return `${sector}-${capitalTypes.join(',')}-${year}`
+  }
+
+  // 안전한 API 데이터 호출 함수 (간단한 캐싱 적용)
   const fetchCapitalFlowData = async (sector: string, capitalTypes: string[], year: number) => {
+    const cacheKey = getCacheKey(sector, capitalTypes, year)
+    
+    // 캐시 확인 (1분간 유효)
+    if (apiDataCache.current.has(cacheKey)) {
+      const cached = apiDataCache.current.get(cacheKey)
+      if (Date.now() - cached.timestamp < 60000) { // 1분 캐시
+        console.log(`✅ Cache hit for ${year}`)
+        return cached.data
+      }
+    }
+
     try {
       const params = new URLSearchParams()
       
@@ -33,6 +54,7 @@ export default function SectorBasedMap({
       }
       params.append('aggregate', 'true')
       
+      console.log(`🔄 API call for ${year}`)
       const response = await fetch(`http://localhost:8001/api/v1/capitalflows/capitalflows/?${params}`)
       
       if (!response.ok) {
@@ -41,6 +63,13 @@ export default function SectorBasedMap({
       }
       
       const data = await response.json()
+      
+      // 캐시에 저장
+      apiDataCache.current.set(cacheKey, {
+        data: data,
+        timestamp: Date.now()
+      })
+      
       return data
     } catch (error) {
       console.error('API 호출 오류:', error)
@@ -94,8 +123,16 @@ export default function SectorBasedMap({
     const loadData = async () => {
       setLoading(true)
       try {
-        const geoResponse = await fetch('/world-countries-detailed.json')
-        const worldData = await geoResponse.json()
+        // GeoJSON 캐싱
+        let worldData = geoDataCache.current
+        if (!worldData) {
+          console.log('🔄 Loading GeoJSON data')
+          const geoResponse = await fetch('/world-countries-detailed.json')
+          worldData = await geoResponse.json()
+          geoDataCache.current = worldData
+        } else {
+          console.log('✅ GeoJSON cache hit')
+        }
         
         console.log('Sector-based map loaded:', worldData.features.length, 'countries')
         console.log('Current sector:', sector, 'Current year:', year)
@@ -248,6 +285,12 @@ export default function SectorBasedMap({
           type: 'FeatureCollection',
           features: enrichedFeatures
         })
+        
+        // 인접 연도 데이터 미리 로드 (백그라운드)
+        setTimeout(() => {
+          preloadAdjacentYears(sector, capitalTypes, year)
+        }, 500)
+        
       } catch (error) {
         console.error('Failed to load map data:', error)
       } finally {
@@ -257,6 +300,23 @@ export default function SectorBasedMap({
 
     loadData()
   }, [year, sector, capitalTypes, isMounted])
+
+  // 인접 연도 데이터 미리 로드
+  const preloadAdjacentYears = async (sector: string, capitalTypes: string[], currentYear: number) => {
+    const adjacentYears = [currentYear - 1, currentYear + 1].filter(y => y >= 1970 && y <= 2024)
+    
+    for (const year of adjacentYears) {
+      const cacheKey = getCacheKey(sector, capitalTypes, year)
+      if (!apiDataCache.current.has(cacheKey)) {
+        try {
+          await fetchCapitalFlowData(sector, capitalTypes, year)
+          console.log(`🚀 Preloaded data for ${year}`)
+        } catch (error) {
+          console.log(`⚠️ Failed to preload ${year}`)
+        }
+      }
+    }
+  }
 
   // SVG 경로 생성
   const getPathFromGeometry = (geometry: any) => {
