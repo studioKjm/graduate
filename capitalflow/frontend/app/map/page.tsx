@@ -13,10 +13,15 @@ const MapVisualization = dynamic(() => import('@/components/map/BulkLoadingSecto
 })
 
 export default function MapPage() {
+  // 모든 자본 타입을 디폴트로 설정
+  const allCapitalTypes = [
+    'FDI', 'VC', 'MA', 'IPO', 'PE', 'BONDS', 'FPI', 'SWF', 'GREENFIELD', 'JV', 'DEVFIN'
+  ]
+  
   const [mapFilters, setMapFilters] = useState({
     year: 2023,
     sector: '',
-    capitalTypes: [] as string[],
+    capitalTypes: allCapitalTypes,
     visualizationType: 'choropleth' as 'choropleth' | 'flow' | 'both'
   })
   const [isAnimating, setIsAnimating] = useState(false)
@@ -78,11 +83,12 @@ export default function MapPage() {
               <div>
                 <span className="font-medium">자본 타입:</span> {
                   mapFilters.capitalTypes.length === 0 ? '선택 안함' : 
+                  mapFilters.capitalTypes.length === allCapitalTypes.length ? '전체 선택' :
                   mapFilters.capitalTypes.length === 1 ? mapFilters.capitalTypes[0] :
                   `${mapFilters.capitalTypes.length}개 선택`
                 }
               </div>
-              {mapFilters.capitalTypes.length > 1 && (
+              {mapFilters.capitalTypes.length > 1 && mapFilters.capitalTypes.length < allCapitalTypes.length && (
                 <div className="text-xs text-gray-500 pl-4">
                   {mapFilters.capitalTypes.join(', ')}
                 </div>
