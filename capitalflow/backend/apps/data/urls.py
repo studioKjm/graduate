@@ -12,7 +12,10 @@ app_name = 'data'
 
 urlpatterns = [
     # 메인 API 엔드포인트
-    path('capitalflows/', views.CapitalFlowsAPIView.as_view(), name='capital-flows'),
+    path('capitalflows/', views.CapitalFlowAPIView.as_view(), name='capital-flows'),
+    
+    # 새로운 벌크 로딩 API
+    path('bulk-years/', views.BulkYearDataAPIView.as_view(), name='bulk-years'),
     
     # 메타데이터
     path('metadata/', views.MetadataAPIView.as_view(), name='metadata'),

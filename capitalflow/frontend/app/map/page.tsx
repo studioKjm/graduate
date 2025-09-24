@@ -6,8 +6,8 @@ import MapControls from '@/components/map/MapControls'
 import MapLegend from '@/components/map/MapLegend'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
-// Dynamically import the bulk loading map component for instant year switching
-const MapVisualization = dynamic(() => import('@/components/map/BulkLoadingSectorMap'), {
+// Dynamically import the ULTRA-FAST loading map component
+const MapVisualization = dynamic(() => import('@/components/map/FastLoadingSectorMap'), {
   loading: () => <LoadingSpinner />,
   ssr: false,
 })
