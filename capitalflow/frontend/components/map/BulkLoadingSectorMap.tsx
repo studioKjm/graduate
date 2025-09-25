@@ -1,12 +1,14 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
+import { formatNumberBoth } from '@/utils/formatters'
 
 interface BulkLoadingSectorMapProps {
   year?: number
   sector?: string
   capitalTypes?: string[]
   visualizationType?: 'choropleth' | 'flow' | 'both'
+  onDataChange?: (data: any) => void
 }
 
 interface YearlyData {
@@ -19,7 +21,8 @@ export default function BulkLoadingSectorMap({
   year = 2023,
   sector = '',
   capitalTypes = [],
-  visualizationType = 'choropleth'
+  visualizationType = 'choropleth',
+  onDataChange
 }: BulkLoadingSectorMapProps) {
   const [mapData, setMapData] = useState<any>(null)
   const [allYearlyData, setAllYearlyData] = useState<YearlyData>({})
@@ -210,6 +213,26 @@ export default function BulkLoadingSectorMap({
   useEffect(() => {
     setIsMounted(true)
   }, [])
+
+  // 현재 연도 데이터를 상위 컴포넌트로 전달
+  useEffect(() => {
+    if (!allYearlyData[year] || !onDataChange) return
+
+    const currentYearData = allYearlyData[year]
+    const formattedData: any = {}
+
+    Object.entries(currentYearData).forEach(([countryCode, amount]) => {
+      if (amount > 0) {
+        formattedData[countryCode] = {
+          countryName: countryCode, // 실제로는 국가명 매핑이 필요할 수 있음
+          amount: amount,
+          intensity: amount / Math.max(...Object.values(currentYearData), 1)
+        }
+      }
+    })
+
+    onDataChange(formattedData)
+  }, [allYearlyData, year, onDataChange])
 
   // 색상 정의
   const sectorColors = {
@@ -409,7 +432,12 @@ export default function BulkLoadingSectorMap({
           <div className="text-sm text-gray-600 space-y-1">
             <div>
               <span className="font-medium">총 자본:</span>{' '}
-              ${hoveredCountry.capital_amount?.toLocaleString() || '0'}
+              <span className="font-bold text-blue-600">
+                {formatNumberBoth(hoveredCountry.capital_amount || 0).short}
+              </span>
+              <div className="text-xs text-gray-500 mt-1">
+                {formatNumberBoth(hoveredCountry.capital_amount || 0).detailed}
+              </div>
             </div>
             <div>
               <span className="font-medium">선택된 타입:</span>{' '}

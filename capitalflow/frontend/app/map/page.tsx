@@ -5,6 +5,7 @@ import { useState } from 'react'
 import MapControls from '@/components/map/MapControls'
 import MapLegend from '@/components/map/MapLegend'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import DataVisualizationPanel from '@/components/charts/DataVisualizationPanel'
 
 // Dynamically import the bulk loading map component for instant year switching
 const MapVisualization = dynamic(() => import('@/components/map/BulkLoadingSectorMap'), {
@@ -25,6 +26,7 @@ export default function MapPage() {
     visualizationType: 'choropleth' as 'choropleth' | 'flow' | 'both'
   })
   const [isAnimating, setIsAnimating] = useState(false)
+  const [mapData, setMapData] = useState<any>({}) // 지도 데이터 상태 추가
 
   const handleFiltersChange = (newFilters: Partial<typeof mapFilters>) => {
     setMapFilters(prev => ({ ...prev, ...newFilters }))
@@ -35,8 +37,8 @@ export default function MapPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col">
-      <div className="flex-1 relative bg-gray-100">
+    <div className="min-h-screen flex flex-col">
+      <div className="h-screen relative bg-gray-100">
         {/* Map Container */}
         <div className="absolute inset-0">
           <MapVisualization 
@@ -44,6 +46,7 @@ export default function MapPage() {
             sector={mapFilters.sector}
             capitalTypes={mapFilters.capitalTypes}
             visualizationType={mapFilters.visualizationType}
+            onDataChange={setMapData}
           />
         </div>
         
@@ -121,6 +124,14 @@ export default function MapPage() {
           </div>
         </div>
       </div>
+
+      {/* 데이터 시각화 패널 */}
+      <DataVisualizationPanel
+        data={mapData}
+        year={mapFilters.year}
+        sector={mapFilters.sector}
+        capitalTypes={mapFilters.capitalTypes}
+      />
     </div>
   )
 }
