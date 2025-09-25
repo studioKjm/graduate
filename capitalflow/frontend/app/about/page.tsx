@@ -47,50 +47,92 @@ export default function AboutPage() {
         </div>
 
         <div className="mb-16">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-8">데이터 출처</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">World Bank</h3>
-              <p className="text-gray-600">
-                국제 직접투자(FDI) 및 다자간 투자 데이터
-              </p>
+          <h2 className="text-3xl font-bold text-gray-900 text-center mb-8">현재 사용 중인 데이터 출처</h2>
+          
+          {/* 주요 국제기구 - 실제 사용 중 */}
+          <div className="mb-12">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6 text-center">주요 국제기구</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">IMF</h4>
+                <p className="text-gray-600 text-sm">
+                  국제수지 및 자본계정 통계 (분기별)
+                </p>
+                <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">활성</span>
+              </div>
+              <div className="text-center bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">World Bank</h4>
+                <p className="text-gray-600 text-sm">
+                  국제 직접투자(FDI) 및 포트폴리오 투자 데이터
+                </p>
+                <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">활성</span>
+              </div>
+              <div className="text-center bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">UNCTAD</h4>
+                <p className="text-gray-600 text-sm">
+                  세계투자보고서 및 글로벌 FDI 데이터
+                </p>
+                <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">활성</span>
+              </div>
+              <div className="text-center bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">BIS</h4>
+                <p className="text-gray-600 text-sm">
+                  국제결제은행 은행 간 자본 흐름 통계
+                </p>
+                <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">활성</span>
+              </div>
             </div>
-            <div className="text-center">
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">IMF</h3>
-              <p className="text-gray-600">
-                국제수지 및 자본계정 통계
-              </p>
+          </div>
+
+          {/* 중앙은행 - 실제 사용 중 */}
+          <div className="mb-12">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6 text-center">중앙은행</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="text-center bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                <h4 className="text-lg font-semibold text-gray-900 mb-1">Fed (US)</h4>
+                <p className="text-gray-600 text-sm">미국 연방준비제도 - 미국 자본 흐름 데이터</p>
+                <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">활성</span>
+              </div>
+              <div className="text-center bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                <h4 className="text-lg font-semibold text-gray-900 mb-1">한국은행 (BOK)</h4>
+                <p className="text-gray-600 text-sm">ECOS 경제통계시스템 - 한국 자본 흐름 데이터</p>
+                <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">활성</span>
+              </div>
             </div>
-            <div className="text-center">
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">OECD</h3>
-              <p className="text-gray-600">
-                OECD 국가 간 투자 통계 및 분야별 데이터
-              </p>
+          </div>
+
+          {/* 민간 데이터 제공업체 - 실제 사용 중 */}
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6 text-center">민간 데이터 제공업체</h3>
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-4 max-w-md mx-auto">
+              <div className="text-center bg-orange-50 p-4 rounded-lg border-l-4 border-orange-500">
+                <h4 className="text-lg font-semibold text-gray-900 mb-2">Crunchbase</h4>
+                <p className="text-gray-600 text-sm">벤처캐피털 투자 및 스타트업 펀딩 데이터</p>
+                <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">활성</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 데이터 처리 정보 */}
+          <div className="bg-gray-50 p-6 rounded-lg">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3 text-center">데이터 처리 방식</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="text-center">
+                <div className="font-medium text-gray-900 mb-1">신뢰도 가중치</div>
+                <p className="text-gray-600">IMF (0.95), World Bank (0.88), BIS (0.92), UNCTAD (0.90)</p>
+              </div>
+              <div className="text-center">
+                <div className="font-medium text-gray-900 mb-1">데이터 융합</div>
+                <p className="text-gray-600">머신러닝 기반 이상치 제거 및 가중평균</p>
+              </div>
+              <div className="text-center">
+                <div className="font-medium text-gray-900 mb-1">업데이트 주기</div>
+                <p className="text-gray-600">분기별 (IMF), 연간 (World Bank, UNCTAD), 실시간 (Crunchbase)</p>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-gray-50 rounded-lg p-8">
-          <h2 className="text-3xl font-bold text-gray-900 text-center mb-8">기술 스택</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-2">프론트엔드</h4>
-              <p className="text-sm text-gray-600">Next.js, React, TypeScript</p>
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-2">시각화</h4>
-              <p className="text-sm text-gray-600">Deck.gl, Mapbox, D3.js</p>
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-2">백엔드</h4>
-              <p className="text-sm text-gray-600">Django, PostgreSQL</p>
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-900 mb-2">인프라</h4>
-              <p className="text-sm text-gray-600">Docker, Redis, Celery</p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   )
