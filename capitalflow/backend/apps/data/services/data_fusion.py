@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 class OutlierDetector:
     """이상치 탐지 클래스"""
     
-    def __init__(self, contamination: float = 0.1):
+    def __init__(self, contamination: float = 0.05):
         self.contamination = contamination
         self.model = IsolationForest(
             contamination=contamination,
@@ -549,8 +549,8 @@ class DataValidationService:
             if recent_amounts:
                 avg_recent = sum(recent_amounts) / len(recent_amounts)
                 
-                # 3배 이상 차이나면 의심 (기존 5배에서 강화)
-                if current_amount > avg_recent * 3 or current_amount < avg_recent * 0.33:
+                # 5배 이상 차이나면 의심 (완화)
+                if current_amount > avg_recent * 5 or current_amount < avg_recent * 0.2:
                     logger.warning(f"급격한 변화 탐지: {processed_data}, 과거평균: {avg_recent}, 현재: {current_amount}")
                     return False
             

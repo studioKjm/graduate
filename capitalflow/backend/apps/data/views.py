@@ -76,7 +76,8 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
-from django.db.models import Q, Sum, Count, F, Case, When, IntegerField
+from django.db.models import Q, Sum, Count, F, Case, When, IntegerField, Avg
+from django.db import models
 from django.core.paginator import Paginator
 import json
 from decimal import Decimal
@@ -84,11 +85,54 @@ from decimal import Decimal
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def health_check(request):
-    """API 상태 확인"""
-    return JsonResponse({
-        'status': 'healthy',
-        'message': 'Capital Flow API is running'
-    })
+    """API 상태 확인 및 시스템 통계"""
+    try:
+        from .models import ProcessedCapitalData, RawCapitalData, DataSource
+        
+        # 기본 통계 수집
+        processed_count = ProcessedCapitalData.objects.count()
+        raw_count = RawCapitalData.objects.count()
+        active_sources = DataSource.objects.filter(is_active=True).count()
+        
+        # 평균 신뢰도 계산
+        avg_confidence = ProcessedCapitalData.objects.aggregate(
+            avg_conf=Avg('confidence_score')
+        )['avg_conf'] or 0
+        
+        # 최근 처리 정보
+        latest_processing = ProcessedCapitalData.objects.order_by('-processing_date').first()
+        
+        return JsonResponse({
+            'status': 'healthy',
+            'message': 'Capital Flow API is running',
+            'statistics': {
+                'processed_data_count': processed_count,
+                'raw_data_count': raw_count,
+                'active_sources': active_sources,
+                'average_confidence': float(avg_confidence),
+                'latest_processing': {
+                    'date': latest_processing.processing_date.isoformat() if latest_processing else None,
+                    'count': 1 if latest_processing else 0
+                }
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Health check error: {e}")
+        return JsonResponse({
+            'status': 'healthy',
+            'message': 'Capital Flow API is running',
+            'statistics': {
+                'processed_data_count': 0,
+                'raw_data_count': 0,
+                'active_sources': 0,
+                'average_confidence': 0.0,
+                'latest_processing': {
+                    'date': None,
+                    'count': 0
+                }
+            }
+        })
 
 class CapitalFlowAPIView(APIView):
     """자본 흐름 데이터 API"""
@@ -311,22 +355,32 @@ class ProcessingLogsAPIView(APIView):
             from .models import DataProcessingLog
             
             limit = int(request.query_params.get('limit', 50))
-            logs = DataProcessingLog.objects.order_by('-created_at')[:limit]
+            logs = DataProcessingLog.objects.select_related('source', 'country', 'sector').order_by('-start_time')[:limit]
             
             log_data = []
             for log in logs:
                 log_data.append({
-                    'id': log.id,
-                    'operation_type': log.operation_type,
+                    'id': str(log.id),
+                    'processing_type': log.processing_type,
                     'status': log.status,
-                    'details': log.details,
-                    'created_at': log.created_at.isoformat(),
-                    'processing_time_seconds': log.processing_time_seconds
+                    'source_name': log.source.name if log.source else None,
+                    'country_name': log.country.name if log.country else None,
+                    'sector_name': log.sector.name if log.sector else None,
+                    'year_start': log.year_start,
+                    'year_end': log.year_end,
+                    'records_processed': log.records_processed,
+                    'records_success': log.records_success,
+                    'records_failed': log.records_failed,
+                    'start_time': log.start_time.isoformat() if log.start_time else None,
+                    'end_time': log.end_time.isoformat() if log.end_time else None,
+                    'duration_seconds': log.duration_seconds,
+                    'error_message': log.error_message
                 })
             
             return Response({
                 'success': True,
-                'logs': log_data
+                'logs': log_data,
+                'total_count': len(log_data)
             })
             
         except Exception as e:

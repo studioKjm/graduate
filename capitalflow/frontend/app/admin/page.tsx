@@ -327,21 +327,21 @@ export default function AdminPage() {
                   <div className="bg-white p-6 rounded-lg shadow">
                     <h3 className="text-lg font-medium text-gray-900 mb-2">처리된 데이터</h3>
                     <p className="text-3xl font-bold text-blue-600">
-                      {systemStats.statistics.processed_data_count.toLocaleString()}
+                      {(systemStats?.statistics?.processed_data_count || 0).toLocaleString()}
                     </p>
                     <p className="text-sm text-gray-500">개 레코드</p>
                   </div>
                   <div className="bg-white p-6 rounded-lg shadow">
                     <h3 className="text-lg font-medium text-gray-900 mb-2">원시 데이터</h3>
                     <p className="text-3xl font-bold text-green-600">
-                      {systemStats.statistics.raw_data_count.toLocaleString()}
+                      {(systemStats?.statistics?.raw_data_count || 0).toLocaleString()}
                     </p>
                     <p className="text-sm text-gray-500">개 레코드</p>
                   </div>
                   <div className="bg-white p-6 rounded-lg shadow">
                     <h3 className="text-lg font-medium text-gray-900 mb-2">활성 소스</h3>
                     <p className="text-3xl font-bold text-purple-600">
-                      {systemStats.statistics.active_sources}
+                      {systemStats?.statistics?.active_sources || 0}
                     </p>
                     <p className="text-sm text-gray-500">개 소스</p>
                   </div>
