@@ -20,6 +20,9 @@ urlpatterns = [
     # 메타데이터
     path('metadata/', views.MetadataAPIView.as_view(), name='metadata'),
     
+    # 뉴스 검색
+    path('news/', views.NewsAPIView.as_view(), name='news'),
+    
     # 시스템 상태
     path('health/', views.health_check, name='health-check'),
     

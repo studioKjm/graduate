@@ -6,6 +6,7 @@ import MapControls from '@/components/map/MapControls'
 import MapLegend from '@/components/map/MapLegend'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import DataVisualizationPanel from '@/components/charts/DataVisualizationPanel'
+import NewsPanel from '@/components/news/NewsPanel'
 
 // Dynamically import the bulk loading map component for instant year switching
 const MapVisualization = dynamic(() => import('@/components/map/BulkLoadingSectorMap'), {
@@ -129,6 +130,28 @@ export default function MapPage() {
       <DataVisualizationPanel
         data={mapData}
         year={mapFilters.year}
+        sector={mapFilters.sector}
+        capitalTypes={mapFilters.capitalTypes}
+      />
+
+      {/* 뉴스 패널 */}
+      <NewsPanel
+        year={mapFilters.year}
+        country={(() => {
+          // 가장 높은 투자액을 가진 국가 선택
+          if (!mapData || Object.keys(mapData).length === 0) return 'USA' // 기본값
+          
+          const entries = Object.entries(mapData)
+          if (entries.length === 0) return 'USA'
+          
+          // 투자액이 가장 높은 국가 찾기
+          const topCountry = entries.reduce((max, [countryCode, data]: [string, any]) => {
+            const amount = data?.amount || 0
+            return amount > (max.amount || 0) ? { countryCode, amount } : max
+          }, { countryCode: 'USA', amount: 0 })
+          
+          return topCountry.countryCode
+        })()}
         sector={mapFilters.sector}
         capitalTypes={mapFilters.capitalTypes}
       />

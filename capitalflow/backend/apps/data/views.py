@@ -358,3 +358,79 @@ class MetadataAPIView(APIView):
                 'error': 'Internal server error',
                 'details': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class NewsAPIView(APIView):
+    """뉴스 검색 API"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        """선택된 필터에 기반한 관련 뉴스 검색"""
+        try:
+            from .services.news_crawler import DummyNewsService, NewsService
+            
+            # 쿼리 파라미터 추출
+            year = request.query_params.get('year')
+            country = request.query_params.get('country')
+            sector = request.query_params.get('sector')
+            capital_type = request.query_params.get('capital_type')
+            use_dummy = request.query_params.get('dummy', 'true').lower() == 'true'
+            
+            # 필수 파라미터 검증
+            if not year:
+                return Response({
+                    'error': 'year 파라미터가 필요합니다'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                year_int = int(year)
+                if year_int < 1990 or year_int > 2024:
+                    return Response({
+                        'error': 'year는 1990-2024 범위여야 합니다'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            except ValueError:
+                return Response({
+                    'error': 'year는 숫자여야 합니다'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 뉴스 서비스 선택 (더미 데이터 또는 실제 크롤링)
+            if use_dummy:
+                news_service = DummyNewsService()
+            else:
+                news_service = NewsService()
+            
+            # 뉴스 검색
+            result = news_service.get_related_news(
+                year=year_int,
+                country=country,
+                sector=sector,
+                capital_type=capital_type
+            )
+            
+            # 응답 데이터 구성
+            response_data = {
+                'success': True,
+                'search_params': {
+                    'year': year_int,
+                    'country': country,
+                    'sector': sector,
+                    'capital_type': capital_type,
+                    'use_dummy': use_dummy
+                },
+                'news_data': result,
+                'metadata': {
+                    'total_articles': result.get('count', 0),
+                    'search_query': result.get('query', ''),
+                    'collected_at': result.get('collected_at'),
+                    'data_source': 'dummy' if use_dummy else 'web_crawling'
+                }
+            }
+            
+            return Response(response_data)
+            
+        except Exception as e:
+            logger.error(f"News API error: {e}")
+            return Response({
+                'error': 'Internal server error',
+                'details': str(e),
+                'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
