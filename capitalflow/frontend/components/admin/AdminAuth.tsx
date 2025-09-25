@@ -17,7 +17,7 @@ export default function AdminAuth({ onAuthenticated }: AdminAuthProps) {
     setError('')
 
     // 간단한 패스워드 체크 (실제 환경에서는 서버 인증 필요)
-    if (password === 'admin123' || password === 'capitalflow2024') {
+    if (password === 'admin123' || password === 'capitalflow2025') {
       localStorage.setItem('admin_authenticated', 'true')
       onAuthenticated()
     } else {
@@ -94,7 +94,7 @@ export default function AdminAuth({ onAuthenticated }: AdminAuthProps) {
 
             <div className="mt-4 text-sm text-gray-600 space-y-1">
               <div>• 패스워드: <code className="bg-gray-100 px-1 rounded">admin123</code></div>
-              <div>• 또는: <code className="bg-gray-100 px-1 rounded">capitalflow2024</code></div>
+              <div>• 또는: <code className="bg-gray-100 px-1 rounded">capitalflow2025</code></div>
             </div>
           </div>
         </div>

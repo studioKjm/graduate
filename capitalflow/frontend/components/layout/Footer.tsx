@@ -68,7 +68,7 @@ export default function Footer() {
             ))}
           </div>
           <p className="mt-4 text-center text-sm text-gray-400 md:text-left">
-            &copy; 2024 CapitalFlow. All rights reserved.
+            &copy; 2025 CapitalFlow. All rights reserved.
           </p>
           <p className="mt-2 text-center text-xs text-gray-400 md:text-left">
             데이터 출처: World Bank, IMF, OECD
