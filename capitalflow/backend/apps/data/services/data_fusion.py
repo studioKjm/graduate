@@ -208,23 +208,26 @@ class DataFusionService:
                     'raw_data_obj': raw_data
                 })
             
-            # 이상치 탐지
-            outlier_flags = self.outlier_detector.detect_outliers(raw_data_list)
+            # 이상치 탐지 임시 비활성화 (데이터 부족 문제 해결을 위해)
+            # outlier_flags = self.outlier_detector.detect_outliers(raw_data_list)
             
-            # 이상치 플래그 업데이트
-            for i, raw_data_info in enumerate(raw_data_list):
-                if outlier_flags[i]:
-                    raw_data_info['raw_data_obj'].is_outlier = True
-                    raw_data_info['raw_data_obj'].save()
+            # 모든 데이터를 유효한 데이터로 처리
+            valid_data = raw_data_list
             
-            # 이상치가 아닌 데이터만 필터링
-            valid_data = [
-                data for i, data in enumerate(raw_data_list) 
-                if not outlier_flags[i]
-            ]
+            # # 이상치 플래그 업데이트 (비활성화)
+            # for i, raw_data_info in enumerate(raw_data_list):
+            #     if outlier_flags[i]:
+            #         raw_data_info['raw_data_obj'].is_outlier = True
+            #         raw_data_info['raw_data_obj'].save()
+            
+            # # 이상치가 아닌 데이터만 필터링 (비활성화)
+            # valid_data = [
+            #     data for i, data in enumerate(raw_data_list) 
+            #     if not outlier_flags[i]
+            # ]
             
             if not valid_data:
-                logger.warning(f"모든 데이터가 이상치로 판정됨: {country_code}-{sector_code}-{capital_type_code}-{year}")
+                logger.warning(f"데이터가 없음: {country_code}-{sector_code}-{capital_type_code}-{year}")
                 return None
             
             # 융합 방법 결정
