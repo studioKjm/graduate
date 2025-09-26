@@ -167,7 +167,7 @@ export default function AdminPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          year_start: 2020,
+          year_start: 1970,  // 전체 기간으로 변경
           year_end: 2024
         })
       })
@@ -177,7 +177,7 @@ export default function AdminPage() {
       addToast({
         type: 'success',
         title: '데이터 융합 완료',
-        message: `처리: ${result.results?.processed || 0}개, 업데이트: ${result.results?.updated || 0}개`
+        message: `처리: ${result.results?.processed || 0}개, 생성: ${result.results?.created || 0}개, 업데이트: ${result.results?.updated || 0}개`
       })
       
       // 융합 완료 후 강제 새로고침 (1초 후)
