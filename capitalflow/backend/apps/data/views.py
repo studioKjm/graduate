@@ -304,13 +304,18 @@ class DataFusionAPIView(APIView):
             from .services.data_fusion import DataFusionService
             
             fusion_service = DataFusionService()
-            year = request.data.get('year', 2023)
-            algorithm = request.data.get('algorithm', 'WEIGHTED_AVG')
+            year_start = request.data.get('year_start', 2020)
+            year_end = request.data.get('year_end', 2024)
             
-            results = fusion_service.fuse_data_for_year(year, algorithm)
+            # 배치 융합 실행
+            results = fusion_service.batch_fusion(
+                year_start=year_start,
+                year_end=year_end
+            )
             
             return Response({
                 'success': True,
+                'message': f'{year_start}-{year_end}년 데이터 융합 완료',
                 'results': results
             })
             
