@@ -61,6 +61,7 @@ export default function AdminPage() {
   const [processingLogs, setProcessingLogs] = useState<ProcessingLog[]>([])
   const [loading, setLoading] = useState(false)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
+  const [lastUpdated, setLastUpdated] = useState<string>('')
   const API_BASE_URL = 'http://localhost:8001/api/v1/capitalflows'
 
   // 토스트 관리 함수들
@@ -79,9 +80,15 @@ export default function AdminPage() {
   // 시스템 상태 조회
   const fetchSystemStats = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/health/`)
+      // 캐시 방지를 위한 타임스탬프 추가
+      const timestamp = new Date().getTime()
+      const response = await fetch(`${API_BASE_URL}/health/?t=${timestamp}`, {
+        cache: 'no-cache'
+      })
       const data = await response.json()
       setSystemStats(data)
+      setLastUpdated(new Date().toLocaleString('ko-KR'))
+      console.log('시스템 상태 업데이트:', data.statistics)
     } catch (error) {
       console.error('시스템 상태 조회 실패:', error)
     }
@@ -165,13 +172,25 @@ export default function AdminPage() {
         })
       })
       const result = await response.json()
+      console.log('데이터 융합 결과:', result)
+      
       addToast({
         type: 'success',
         title: '데이터 융합 완료',
-        message: `처리: ${result.results?.processed || 0}개, 생성: ${result.results?.created || 0}개`
+        message: `처리: ${result.results?.processed || 0}개, 업데이트: ${result.results?.updated || 0}개`
       })
-      fetchProcessingLogs()
-      fetchSystemStats()
+      
+      // 융합 완료 후 강제 새로고침 (1초 후)
+      setTimeout(() => {
+        console.log('데이터 새로고침 시작...')
+        fetchProcessingLogs()
+        fetchSystemStats()
+        addToast({
+          type: 'info',
+          title: '데이터 새로고침',
+          message: '최신 데이터로 업데이트되었습니다.'
+        })
+      }, 1000)
     } catch (error) {
       addToast({
         type: 'error',
@@ -355,10 +374,18 @@ export default function AdminPage() {
             </div>
 
             <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">빠른 액션</h3>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">빠른 액션</h3>
+                {lastUpdated && (
+                  <span className="text-sm text-gray-500">
+                    마지막 업데이트: {lastUpdated}
+                  </span>
+                )}
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <button
                   onClick={() => {
+                    console.log('수동 새로고침 시작...')
                     fetchSystemStats()
                     fetchMetadata()
                     fetchProcessingLogs()
@@ -370,7 +397,7 @@ export default function AdminPage() {
                   }}
                   className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
                 >
-                  데이터 새로고침
+                  🔄 데이터 새로고침
                 </button>
                 <button
                   onClick={() => executeDataCollection()}

@@ -363,6 +363,9 @@ class DataFusionService:
         # 참조 원시 데이터 연결
         processed_data.raw_data_refs.set(raw_data_qs)
         
+        # 생성/업데이트 상태를 객체에 저장
+        processed_data._was_created = created
+        
         return processed_data
     
     def _create_predicted_data(
@@ -396,6 +399,9 @@ class DataFusionService:
                 'processing_date': timezone.now()
             }
         )
+        
+        # 생성/업데이트 상태를 객체에 저장
+        processed_data._was_created = created
         
         return processed_data
     
@@ -455,7 +461,8 @@ class DataFusionService:
                                 )
                                 
                                 if processed_data:
-                                    if hasattr(processed_data, '_state') and processed_data._state.adding:
+                                    # 생성/업데이트 상태 확인
+                                    if hasattr(processed_data, '_was_created') and processed_data._was_created:
                                         results['created'] += 1
                                     else:
                                         results['updated'] += 1
