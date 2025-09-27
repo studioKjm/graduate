@@ -273,14 +273,33 @@ class DataCollectionAPIView(APIView):
     def post(self, request):
         try:
             from .services.data_collectors import DataCollectionService
+            from .services.external_collectors import ExtendedDataCollectionService
             
             collector = DataCollectionService()
+            extended_collector = ExtendedDataCollectionService()
             year = request.data.get('year', 2023)
             source = request.data.get('source', 'all')
             
             if source == 'all':
+                # 기본 소스 수집
                 results = collector.collect_all_sources(year)
+                # 확장 소스 수집
+                extended_results = extended_collector.collect_all_sources(year)
+                # 결과 합산
+                for key in results:
+                    results[key] += extended_results.get(key, 0)
+            elif source in ['worldbank', 'unctad', 'bis', 'fed', 'bok']:
+                # 확장 소스 수집
+                if source == 'worldbank':
+                    results = extended_collector.collect_worldbank_data(year)
+                elif source == 'unctad':
+                    results = extended_collector.collect_unctad_data(year)
+                elif source == 'bis':
+                    results = extended_collector.collect_bis_data(year)
+                else:
+                    results = extended_collector.collect_all_sources(year)
             else:
+                # 기본 소스 수집
                 results = collector.collect_source(source, year)
             
             return Response({

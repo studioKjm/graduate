@@ -498,15 +498,15 @@ class DataCollectionService:
         logger.info(f"통합 수집 완료: {total_results}")
         return total_results
     
-    def collect_source(self, source_name: str, **kwargs) -> int:
+    def collect_source(self, source_name: str, year: int = 2023, **kwargs) -> int:
         """특정 소스에서 데이터 수집"""
         if source_name not in self.collectors:
             raise ValueError(f"지원하지 않는 데이터 소스: {source_name}")
         
         collector = self.collectors[source_name]
         
-        # 데이터 수집
-        raw_data = collector.collect_data(**kwargs)
+        # 데이터 수집 (year 파라미터 포함)
+        raw_data = collector.collect_data(year=year, **kwargs)
         
         # 데이터 표준화
         standardized_data = collector.standardize_data(raw_data)

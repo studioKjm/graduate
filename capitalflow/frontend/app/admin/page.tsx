@@ -62,6 +62,12 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(false)
   const [toasts, setToasts] = useState<ToastMessage[]>([])
   const [lastUpdated, setLastUpdated] = useState<string>('')
+  
+  // 데이터 수집 관련 상태
+  const [selectedDataSource, setSelectedDataSource] = useState<string>('all')
+  const [selectedYear, setSelectedYear] = useState<number>(2023)
+  const [isCollecting, setIsCollecting] = useState(false)
+  
   const API_BASE_URL = 'http://localhost:8001/api/v1/capitalflows'
 
   // 토스트 관리 함수들
@@ -122,10 +128,15 @@ export default function AdminPage() {
   }
 
   // 데이터 수집 실행
-  const executeDataCollection = async (sourceName?: string) => {
+  const executeDataCollection = async () => {
+    setIsCollecting(true)
     setLoading(true)
     try {
-      const body = sourceName ? { source: sourceName } : {}
+      const body = { 
+        year: selectedYear,
+        ...(selectedDataSource !== 'all' && { source: selectedDataSource })
+      }
+      
       const response = await fetch(`${API_BASE_URL}/admin/collect/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,15 +148,21 @@ export default function AdminPage() {
       }
       
       const result = await response.json()
-      const message = sourceName 
-        ? `${sourceName} 데이터 수집 완료: ${result.collected_records}개 레코드`
-        : `전체 데이터 수집 완료: ${result.total_records}개 레코드`
       
-      addToast({
-        type: 'success',
-        title: '데이터 수집 완료',
-        message: message
-      })
+      if (result.success) {
+        const results = result.results
+        const sourceName = selectedDataSource === 'all' ? '전체 소스' : selectedDataSource
+        const message = `${sourceName} 데이터 수집 완료 (${selectedYear}년): 수집 ${results.collected || 0}개, 생성 ${results.created || 0}개`
+        
+        addToast({
+          type: 'success',
+          title: '데이터 수집 완료',
+          message: message
+        })
+      } else {
+        throw new Error(result.error || '데이터 수집 실패')
+      }
+      
       fetchProcessingLogs()
       fetchSystemStats() // 통계 업데이트
     } catch (error) {
@@ -156,6 +173,7 @@ export default function AdminPage() {
       })
     } finally {
       setLoading(false)
+      setIsCollecting(false)
     }
   }
 
@@ -382,7 +400,67 @@ export default function AdminPage() {
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              
+              {/* 데이터 수집 컨트롤 */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-3">실제 데이터 수집</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      데이터 소스
+                    </label>
+                    <select
+                      value={selectedDataSource}
+                      onChange={(e) => setSelectedDataSource(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="all">전체 소스</option>
+                      <option value="imf">IMF</option>
+                      <option value="worldbank">World Bank</option>
+                      <option value="unctad">UNCTAD</option>
+                      <option value="bis">BIS</option>
+                      <option value="crunchbase">Crunchbase</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      연도
+                    </label>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={2024}>2024년</option>
+                      <option value={2023}>2023년</option>
+                      <option value={2022}>2022년</option>
+                      <option value={2021}>2021년</option>
+                      <option value={2020}>2020년</option>
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={executeDataCollection}
+                      disabled={loading || isCollecting}
+                      className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+                    >
+                      {isCollecting ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          수집 중...
+                        </>
+                      ) : (
+                        '데이터 수집 시작'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button
                   onClick={() => {
                     console.log('수동 새로고침 시작...')
@@ -398,13 +476,6 @@ export default function AdminPage() {
                   className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
                 >
                   🔄 데이터 새로고침
-                </button>
-                <button
-                  onClick={() => executeDataCollection()}
-                  disabled={loading}
-                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
-                >
-                  {loading ? '처리중...' : '전체 데이터 수집'}
                 </button>
                 <button
                   onClick={() => executeDataFusion()}
@@ -426,30 +497,70 @@ export default function AdminPage() {
               
               <div className="space-y-4">
                 <div className="border rounded-lg p-4">
-                  <h4 className="font-medium text-gray-900 mb-2">데이터 수집</h4>
-                  <p className="text-sm text-gray-600 mb-3">외부 소스에서 새로운 데이터를 수집합니다.</p>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => executeDataCollection()}
-                      disabled={loading}
-                      className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
-                    >
-                      전체 소스 수집
-                    </button>
-                    <button
-                      onClick={() => executeDataCollection('IMF')}
-                      disabled={loading}
-                      className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50"
-                    >
-                      IMF만 수집
-                    </button>
-                    <button
-                      onClick={() => executeDataCollection('Crunchbase')}
-                      disabled={loading}
-                      className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50"
-                    >
-                      Crunchbase만 수집
-                    </button>
+                  <h4 className="font-medium text-gray-900 mb-2">실제 데이터 수집</h4>
+                  <p className="text-sm text-gray-600 mb-3">외부 소스에서 실제 데이터를 수집합니다.</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        데이터 소스
+                      </label>
+                      <select
+                        value={selectedDataSource}
+                        onChange={(e) => setSelectedDataSource(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="all">전체 소스</option>
+                        <option value="imf">IMF</option>
+                        <option value="worldbank">World Bank</option>
+                        <option value="unctad">UNCTAD</option>
+                        <option value="bis">BIS</option>
+                        <option value="crunchbase">Crunchbase</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        연도
+                      </label>
+                      <select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value={2024}>2024년</option>
+                        <option value={2023}>2023년</option>
+                        <option value={2022}>2022년</option>
+                        <option value={2021}>2021년</option>
+                        <option value={2020}>2020년</option>
+                      </select>
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        onClick={executeDataCollection}
+                        disabled={loading || isCollecting}
+                        className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+                      >
+                        {isCollecting ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            수집 중...
+                          </>
+                        ) : (
+                          '데이터 수집 시작'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="text-sm text-gray-500">
+                    <p>• <strong>World Bank</strong>: FDI 및 포트폴리오 투자 데이터</p>
+                    <p>• <strong>IMF</strong>: 국제수지 및 자본흐름 데이터</p>
+                    <p>• <strong>UNCTAD</strong>: 글로벌 FDI 통계</p>
+                    <p>• <strong>BIS</strong>: 국제은행 자본흐름</p>
+                    <p>• <strong>Crunchbase</strong>: 벤처캐피털 투자 데이터</p>
                   </div>
                 </div>
 
