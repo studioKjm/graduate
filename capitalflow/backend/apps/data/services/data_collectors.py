@@ -284,21 +284,42 @@ class IMFDataCollector(BaseDataCollector):
     def collect_data(self, **kwargs) -> List[Dict[str, Any]]:
         """IMF Balance of Payments 데이터 수집"""
         try:
-            # IMF API 호출 (예시)
+            # IMF API 호출
             url = "https://www.imf.org/external/datamapper/api/v1/BOP"
             
-            # 실제 구현에서는 IMF API 형식에 맞게 조정
             response = self.session.get(url, timeout=30)
             response.raise_for_status()
             
-            # 임시 더미 데이터 (실제로는 API 응답 파싱)
-            dummy_data = [
-                {'country': 'USA', 'sector': 'AI', 'capital_type': 'FDI', 'year': 2023, 'amount': '50B', 'currency': 'USD'},
-                {'country': 'CHN', 'sector': 'AI', 'capital_type': 'FDI', 'year': 2023, 'amount': '30B', 'currency': 'USD'},
-                {'country': 'JPN', 'sector': 'Semiconductor', 'capital_type': 'FDI', 'year': 2023, 'amount': '20B', 'currency': 'USD'},
-            ]
+            # 실제 API 응답 파싱
+            data = response.json()
+            if not data or 'datasets' not in data:
+                logger.warning("IMF API에서 데이터를 찾을 수 없습니다.")
+                return []
             
-            return dummy_data
+            results = []
+            year = kwargs.get('year', 2023)
+            
+            # IMF 데이터에서 FDI 관련 지표 추출
+            for dataset_name, dataset_data in data['datasets'].items():
+                if 'FDI' in dataset_name.upper() or 'DIRECT' in dataset_name.upper():
+                    for country_code, country_data in dataset_data.items():
+                        if isinstance(country_data, dict) and str(year) in country_data:
+                            value = country_data[str(year)]
+                            if value and float(value) != 0:
+                                # 국가 코드 매핑
+                                mapped_code = self._map_country_code(country_code)
+                                if mapped_code:
+                                    results.append({
+                                        'country': mapped_code,
+                                        'sector': 'ALL',  # IMF는 전체 경제 데이터
+                                        'capital_type': 'FDI',
+                                        'year': year,
+                                        'amount': str(abs(float(value))),
+                                        'currency': 'USD'
+                                    })
+            
+            logger.info(f"IMF 데이터 수집 완료: {len(results)}건")
+            return results
             
         except Exception as e:
             logger.error(f"IMF 데이터 수집 실패: {e}")

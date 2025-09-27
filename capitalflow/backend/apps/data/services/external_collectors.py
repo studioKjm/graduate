@@ -30,8 +30,9 @@ class WorldBankCollector:
         """FDI 유입/유출 데이터 수집"""
         
         try:
-            # FDI 유입 데이터 (BX.KLT.DINV.CD.WD)
-            fdi_inflows_url = f"{self.BASE_URL}/country/all/indicator/BX.KLT.DINV.CD.WD"
+            # 주요 국가들의 FDI 유입 데이터 (BX.KLT.DINV.CD.WD)
+            major_countries = 'USA;CHN;JPN;DEU;GBR;FRA;KOR;CAN;AUS;IND;BRA;RUS;ITA;ESP;NLD;TWN;SGP;CHE;SWE;DNK;NOR;SAU;MEX;ARE;BEL;IRL;ISR;MYS;THA;VEN;IRN;HKG'
+            fdi_inflows_url = f"{self.BASE_URL}/country/{major_countries}/indicator/BX.KLT.DINV.CD.WD"
             params = {
                 'date': year,
                 'format': 'json',
@@ -74,8 +75,9 @@ class WorldBankCollector:
         """포트폴리오 투자 데이터 수집"""
         
         try:
-            # 포트폴리오 투자 유입 (BX.PEF.TOTL.CD.WD)
-            url = f"{self.BASE_URL}/country/all/indicator/BX.PEF.TOTL.CD.WD"
+            # 주요 국가들의 포트폴리오 투자 유입 (BX.PEF.TOTL.CD.WD)
+            major_countries = 'USA;CHN;JPN;DEU;GBR;FRA;KOR;CAN;AUS;IND;BRA;RUS;ITA;ESP;NLD;TWN;SGP;CHE;SWE;DNK;NOR;SAU;MEX;ARE;BEL;IRL;ISR;MYS;THA;VEN;IRN;HKG'
+            url = f"{self.BASE_URL}/country/{major_countries}/indicator/BX.PEF.TOTL.CD.WD"
             params = {
                 'date': year,
                 'format': 'json',
@@ -113,15 +115,16 @@ class WorldBankCollector:
     def _map_country_code(self, wb_code: str) -> Optional[str]:
         """World Bank 국가 코드를 시스템 코드로 매핑"""
         
+        # World Bank는 2자리 코드 사용, 시스템은 3자리 코드 사용
         mapping = {
-            'USA': 'USA', 'CHN': 'CHN', 'JPN': 'JPN', 'DEU': 'DEU',
-            'GBR': 'GBR', 'FRA': 'FRA', 'KOR': 'KOR', 'CAN': 'CAN',
-            'AUS': 'AUS', 'IND': 'IND', 'BRA': 'BRA', 'RUS': 'RUS',
-            'ITA': 'ITA', 'ESP': 'ESP', 'NLD': 'NLD', 'TWN': 'TWN',
-            'SGP': 'SGP', 'CHE': 'CHE', 'SWE': 'SWE', 'DNK': 'DNK',
-            'NOR': 'NOR', 'SAU': 'SAU', 'MEX': 'MEX', 'ARE': 'ARE',
-            'BEL': 'BEL', 'IRL': 'IRL', 'ISR': 'ISR', 'MYS': 'MYS',
-            'THA': 'THA', 'VEN': 'VEN', 'IRN': 'IRN', 'HKG': 'HKG'
+            'US': 'USA', 'CN': 'CHN', 'JP': 'JPN', 'DE': 'DEU',
+            'GB': 'GBR', 'FR': 'FRA', 'KR': 'KOR', 'CA': 'CAN',
+            'AU': 'AUS', 'IN': 'IND', 'BR': 'BRA', 'RU': 'RUS',
+            'IT': 'ITA', 'ES': 'ESP', 'NL': 'NLD', 'TW': 'TWN',
+            'SG': 'SGP', 'CH': 'CHE', 'SE': 'SWE', 'DK': 'DNK',
+            'NO': 'NOR', 'SA': 'SAU', 'MX': 'MEX', 'AE': 'ARE',
+            'BE': 'BEL', 'IE': 'IRL', 'IL': 'ISR', 'MY': 'MYS',
+            'TH': 'THA', 'VE': 'VEN', 'IR': 'IRN', 'HK': 'HKG'
         }
         
         return mapping.get(wb_code)
@@ -355,6 +358,77 @@ class ExtendedDataCollectionService:
                 results['failed'] += 1
         
         return results
+    
+    def collect_worldbank_data(self, year: int = 2023) -> Dict[str, int]:
+        """World Bank 데이터 수집"""
+        try:
+            collector = self.collectors['world_bank']
+            raw_data_list = []
+            raw_data_list.extend(collector.collect_fdi_data(year))
+            raw_data_list.extend(collector.collect_portfolio_investment(year))
+            
+            results = {'collected': 0, 'created': 0, 'updated': 0, 'failed': 0}
+            
+            for raw_data in raw_data_list:
+                try:
+                    self._save_raw_data(raw_data, collector.source)
+                    results['created'] += 1
+                except Exception as save_error:
+                    logger.error(f"데이터 저장 실패: {save_error}")
+                    results['failed'] += 1
+            
+            results['collected'] = len(raw_data_list)
+            return results
+            
+        except Exception as e:
+            logger.error(f"World Bank 데이터 수집 실패: {e}")
+            return {'collected': 0, 'created': 0, 'updated': 0, 'failed': 1}
+    
+    def collect_unctad_data(self, year: int = 2023) -> Dict[str, int]:
+        """UNCTAD 데이터 수집"""
+        try:
+            collector = self.collectors['unctad']
+            raw_data_list = collector.collect_global_fdi_data(year)
+            
+            results = {'collected': 0, 'created': 0, 'updated': 0, 'failed': 0}
+            
+            for raw_data in raw_data_list:
+                try:
+                    self._save_raw_data(raw_data, collector.source)
+                    results['created'] += 1
+                except Exception as save_error:
+                    logger.error(f"데이터 저장 실패: {save_error}")
+                    results['failed'] += 1
+            
+            results['collected'] = len(raw_data_list)
+            return results
+            
+        except Exception as e:
+            logger.error(f"UNCTAD 데이터 수집 실패: {e}")
+            return {'collected': 0, 'created': 0, 'updated': 0, 'failed': 1}
+    
+    def collect_bis_data(self, year: int = 2023) -> Dict[str, int]:
+        """BIS 데이터 수집"""
+        try:
+            collector = self.collectors['bis']
+            raw_data_list = collector.collect_banking_flows(year)
+            
+            results = {'collected': 0, 'created': 0, 'updated': 0, 'failed': 0}
+            
+            for raw_data in raw_data_list:
+                try:
+                    self._save_raw_data(raw_data, collector.source)
+                    results['created'] += 1
+                except Exception as save_error:
+                    logger.error(f"데이터 저장 실패: {save_error}")
+                    results['failed'] += 1
+            
+            results['collected'] = len(raw_data_list)
+            return results
+            
+        except Exception as e:
+            logger.error(f"BIS 데이터 수집 실패: {e}")
+            return {'collected': 0, 'created': 0, 'updated': 0, 'failed': 1}
     
     def _save_raw_data(self, data: Dict[str, Any], source: DataSource):
         """원시 데이터를 데이터베이스에 저장"""
