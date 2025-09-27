@@ -450,7 +450,82 @@ class DataQualityAnalysisAPIView(APIView):
                 'unverified_raw_records': RawCapitalData.objects.filter(is_verified=False).count()
             }
             
+            # 프론트엔드용 형식으로 변환
+            total_records = ProcessedCapitalData.objects.count()
+            
+            # 소스별 데이터 분포 (프론트엔드 형식)
+            by_source = []
+            for sq in source_quality:
+                by_source.append({
+                    'source': sq['source_name'],
+                    'count': sq['record_count'],
+                    'avgConfidence': sq['avg_quality_score']
+                })
+            
+            # 국가별 데이터 분포
+            by_country = list(
+                ProcessedCapitalData.objects
+                .values('country__name')
+                .annotate(
+                    count=Count('id'),
+                    avg_confidence=Avg('confidence_score')
+                )
+                .order_by('-count')[:10]
+            )
+            
+            # 분야별 데이터 분포
+            by_sector = list(
+                ProcessedCapitalData.objects
+                .values('sector__name')
+                .annotate(
+                    count=Count('id'),
+                    avg_confidence=Avg('confidence_score')
+                )
+                .order_by('-count')
+            )
+            
+            # 연도별 데이터 분포
+            by_year = []
+            for trend in quality_trends:
+                by_year.append({
+                    'year': trend['year'],
+                    'count': trend['record_count'],
+                    'avgConfidence': trend['avg_confidence']
+                })
+            
+            # 누락된 데이터 분석 (간단한 버전)
+            missing_data = []
+            # 모든 가능한 조합 중 실제 데이터가 없는 것 찾기
+            countries = Country.objects.filter(is_active=True)[:5]  # 상위 5개국만
+            sectors = Sector.objects.filter(is_active=True).exclude(code='ALL')[:3]  # 상위 3개 분야만
+            capital_types = CapitalType.objects.filter(is_active=True)[:3]  # 상위 3개 자본타입만
+            years = [2023, 2024]
+            
+            for country in countries:
+                for sector in sectors:
+                    for capital_type in capital_types:
+                        for year in years:
+                            exists = ProcessedCapitalData.objects.filter(
+                                country=country,
+                                sector=sector,
+                                capital_type=capital_type,
+                                year=year
+                            ).exists()
+                            if not exists:
+                                missing_data.append({
+                                    'country': country.name,
+                                    'sector': sector.name,
+                                    'capitalType': capital_type.name,
+                                    'year': year
+                                })
+            
             return Response({
+                'totalRecords': total_records,
+                'bySource': by_source,
+                'byCountry': by_country,
+                'bySector': by_sector,
+                'byYear': by_year,
+                'missingData': missing_data[:20],  # 최대 20개만 반환
                 'source_quality_analysis': source_quality,
                 'fusion_performance': fusion_performance,
                 'quality_trends_by_year': quality_trends,
