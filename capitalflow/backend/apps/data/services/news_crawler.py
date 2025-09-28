@@ -130,7 +130,7 @@ class GoogleNewsCollector:
                         'description': description or f"News article about {title}",
                         'publishedAt': pub_date or datetime.now().isoformat(),
                         'source': {'name': 'Google News'},
-                        'urlToImage': f"https://via.placeholder.com/400x200/0066cc/ffffff?text=News",
+                        'urlToImage': "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=400&h=200&fit=crop&crop=center",
                         'relevanceScore': relevance_score
                     })
                 except Exception as item_error:
@@ -218,7 +218,7 @@ class RedditCollector:
                                     'description': post_data.get('selftext', '')[:200] + "..." if post_data.get('selftext') else f"Reddit discussion about {post_data.get('title', '')}",
                                     'publishedAt': datetime.fromtimestamp(post_data.get('created_utc', 0)).isoformat(),
                                     'source': {'name': f'Reddit r/{subreddit}'},
-                                    'urlToImage': f"https://via.placeholder.com/400x200/ff4500/ffffff?text=Reddit",
+                                    'urlToImage': "https://images.unsplash.com/photo-1611224923853-80b023f02d71?w=400&h=200&fit=crop&crop=center",
                                     'relevanceScore': min(post_data.get('score', 0) / 100, 1.0)
                                 })
                 
@@ -265,7 +265,7 @@ class HackerNewsCollector:
                             'description': hit.get('story_text', '') or f"Hacker News discussion about {hit.get('title', '')}",
                             'publishedAt': hit.get('created_at', ''),
                             'source': {'name': 'Hacker News'},
-                            'urlToImage': f"https://via.placeholder.com/400x200/ff6600/ffffff?text=HN",
+                            'urlToImage': "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=400&h=200&fit=crop&crop=center",
                             'relevanceScore': min(hit.get('points', 0) / 100, 1.0)
                         })
                 
@@ -472,7 +472,7 @@ class DummyNewsService:
                 'title': f'{country} AI Investment Reaches Record High in {year}',
                 'description': f'Major {sector} investments in {country} show strong growth in {capital_type} funding during {year}.',
                 'url': f'https://example.com/news/{country.lower()}-ai-investment-{year}',
-                'urlToImage': 'https://via.placeholder.com/400x200/0066cc/ffffff?text=AI+Investment',
+                'urlToImage': 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=400&h=200&fit=crop&crop=center',
                 'publishedAt': f'{year}-12-15T10:30:00Z',
                 'source': {'name': 'Financial News'},
                 'relevanceScore': 0.95
@@ -481,7 +481,7 @@ class DummyNewsService:
                 'title': f'{capital_type} Flows to {country} {sector} Sector Surge',
                 'description': f'Foreign direct investment in {country}\'s {sector} industry reaches new milestones as international investors show confidence.',
                 'url': f'https://example.com/news/{country.lower()}-{sector.lower()}-surge-{year}',
-                'urlToImage': 'https://via.placeholder.com/400x200/00cc66/ffffff?text=Investment+Surge',
+                'urlToImage': 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop&crop=center',
                 'publishedAt': f'{year}-11-20T14:45:00Z',
                 'source': {'name': 'Investment Weekly'},
                 'relevanceScore': 0.88
@@ -490,7 +490,7 @@ class DummyNewsService:
                 'title': f'Global {sector} Investment Trends: {country} Leading the Way',
                 'description': f'Analysis of {year} {sector} investment patterns shows {country} as a key destination for {capital_type} capital.',
                 'url': f'https://example.com/news/global-{sector.lower()}-trends-{year}',
-                'urlToImage': 'https://via.placeholder.com/400x200/cc6600/ffffff?text=Global+Trends',
+                'urlToImage': 'https://images.unsplash.com/photo-1559136555-9303baea8ebd?w=400&h=200&fit=crop&crop=center',
                 'publishedAt': f'{year}-10-08T09:15:00Z',
                 'source': {'name': 'Tech Business Daily'},
                 'relevanceScore': 0.82
@@ -499,7 +499,7 @@ class DummyNewsService:
                 'title': f'{country} Government Announces New {sector} Investment Incentives',
                 'description': f'New policy framework aims to attract more {capital_type} investment in {country}\'s {sector} sector for {year} and beyond.',
                 'url': f'https://example.com/news/{country.lower()}-government-incentives-{year}',
-                'urlToImage': 'https://via.placeholder.com/400x200/6600cc/ffffff?text=Policy+News',
+                'urlToImage': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=200&fit=crop&crop=center',
                 'publishedAt': f'{year}-09-12T16:20:00Z',
                 'source': {'name': 'Government Affairs'},
                 'relevanceScore': 0.76
@@ -508,7 +508,7 @@ class DummyNewsService:
                 'title': f'Major {capital_type} Deal Transforms {country} {sector} Landscape',
                 'description': f'Landmark {capital_type} transaction in {year} sets new precedent for {sector} investments in {country}.',
                 'url': f'https://example.com/news/major-deal-{country.lower()}-{year}',
-                'urlToImage': 'https://via.placeholder.com/400x200/cc0066/ffffff?text=Major+Deal',
+                'urlToImage': 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=200&fit=crop&crop=center',
                 'publishedAt': f'{year}-08-25T11:30:00Z',
                 'source': {'name': 'Deal Monitor'},
                 'relevanceScore': 0.90

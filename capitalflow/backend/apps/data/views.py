@@ -25,7 +25,11 @@ class BulkYearDataAPIView(APIView):
             
             # 필터 적용
             if sector:
-                queryset = queryset.filter(sector__code=sector)
+                # sector가 코드인지 이름인지 확인하여 적절한 필터 적용
+                if len(sector) <= 5:  # 코드로 판단 (예: 'AI', 'BIO')
+                    queryset = queryset.filter(sector__code=sector)
+                else:  # 이름으로 판단 (예: '인공지능', '반도체')
+                    queryset = queryset.filter(sector__name__icontains=sector)
             
             if capital_types:
                 queryset = queryset.filter(capital_type__code__in=capital_types)
@@ -145,6 +149,8 @@ class CapitalFlowAPIView(APIView):
             sector = request.query_params.get('sector')
             capital_types = request.query_params.getlist('capital_types')
             year = request.query_params.get('year')
+            
+            # 디버깅 로그 (제거)
             year_gte = request.query_params.get('year__gte')
             year_lte = request.query_params.get('year__lte')
             aggregate = request.query_params.get('aggregate', 'false').lower() == 'true'
@@ -161,19 +167,30 @@ class CapitalFlowAPIView(APIView):
             queryset = ProcessedCapitalData.objects.select_related(
                 'country', 'sector', 'capital_type'
             )
-            
             # 필터 적용
             if country:
                 queryset = queryset.filter(country__code=country)
             
             if sector:
-                queryset = queryset.filter(sector__code=sector)
+                # sector가 코드인지 이름인지 확인하여 적절한 필터 적용
+                # 먼저 코드로 시도
+                code_queryset = queryset.filter(sector__code=sector)
+                if code_queryset.count() > 0:
+                    queryset = code_queryset
+                else:
+                    # 코드로 찾지 못하면 이름으로 시도
+                    queryset = queryset.filter(sector__name__icontains=sector)
             
             if capital_types:
                 queryset = queryset.filter(capital_type__code__in=capital_types)
             
             if year:
-                queryset = queryset.filter(year=year)
+                try:
+                    year_int = int(year)
+                    queryset = queryset.filter(year=year_int)
+                except (ValueError, TypeError):
+                    logger.warning(f"Invalid year parameter: {year}")
+                    pass
             
             if year_gte:
                 queryset = queryset.filter(year__gte=year_gte)

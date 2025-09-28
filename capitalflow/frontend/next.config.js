@@ -29,7 +29,7 @@ const nextConfig = {
     NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN || '',
   },
   images: {
-    domains: ['images.unsplash.com', 'via.placeholder.com'],
+    domains: ['images.unsplash.com'],
   },
   typescript: {
     ignoreBuildErrors: true,
