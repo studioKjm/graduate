@@ -394,16 +394,19 @@ class DataQualityAnalysisAPIView(APIView):
     def get(self, request):
         """전체적인 데이터 품질 분석"""
         try:
-            # 소스별 품질 분석
+            # 소스별 품질 분석 (ProcessedCapitalData 기준)
             source_quality = []
             for source in DataSource.objects.filter(is_active=True):
-                raw_data = RawCapitalData.objects.filter(source=source)
+                # 해당 소스에서 생성된 ProcessedCapitalData 찾기
+                processed_data = ProcessedCapitalData.objects.filter(
+                    raw_data_refs__source=source
+                ).distinct()
                 
-                if raw_data.exists():
-                    stats = raw_data.aggregate(
+                if processed_data.exists():
+                    stats = processed_data.aggregate(
                         count=Count('id'),
-                        avg_quality=Avg('data_quality_score'),
-                        avg_amount=Avg('amount_usd')
+                        avg_confidence=Avg('confidence_score'),
+                        avg_amount=Avg('final_amount_usd')
                     )
                     
                     source_quality.append({
@@ -411,7 +414,7 @@ class DataQualityAnalysisAPIView(APIView):
                         'source_type': source.source_type,
                         'reliability_weight': float(source.reliability_weight),
                         'record_count': stats['count'],
-                        'avg_quality_score': round(float(stats['avg_quality']), 3),
+                        'avg_quality_score': round(float(stats['avg_confidence']), 3),
                         'avg_amount_usd': round(float(stats['avg_amount']), 2) if stats['avg_amount'] else 0
                     })
             

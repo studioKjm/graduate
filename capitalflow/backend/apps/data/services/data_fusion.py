@@ -266,14 +266,25 @@ class DataFusionService:
         weight_sum = sum(weights)
         weighted_average = weighted_sum / weight_sum if weight_sum > 0 else sum(amounts) / len(amounts)
         
-        # 분산 계산
-        variance = np.var(amounts) if len(amounts) > 1 else 0.0
+        # 분산 계산 (상대적 분산으로 개선)
+        if len(amounts) > 1 and weighted_average > 0:
+            # 상대적 분산 (CV^2) 계산
+            relative_variance = np.var(amounts) / (weighted_average ** 2)
+            # 로그 스케일로 정규화 (0-1 범위)
+            variance = min(1.0, relative_variance)
+        else:
+            variance = 0.0
         
         # 신뢰도 계산 (소스 수와 분산을 고려)
         source_diversity_bonus = min(0.2, len(valid_data) * 0.05)  # 소스 다양성 보너스
-        variance_penalty = min(0.3, variance / weighted_average if weighted_average > 0 else 0)  # 분산 페널티
+        variance_penalty = min(0.3, variance * 0.5)  # 분산 페널티 (0.5로 스케일링)
         
-        confidence = (weight_sum / len(valid_data)) + source_diversity_bonus - variance_penalty
+        # 신뢰도 계산 개선
+        base_confidence = weight_sum / len(valid_data)  # 기본 신뢰도 (소스 가중치 평균)
+        source_count_bonus = min(0.15, (len(valid_data) - 1) * 0.05)  # 소스 수 보너스
+        consistency_bonus = max(0, 0.1 - variance * 0.2)  # 일관성 보너스 (분산이 낮을수록 높음)
+        
+        confidence = base_confidence + source_diversity_bonus + source_count_bonus + consistency_bonus - variance_penalty
         confidence = max(0.0, min(1.0, confidence))
         
         # ML 앙상블 시도 (고급 융합)
