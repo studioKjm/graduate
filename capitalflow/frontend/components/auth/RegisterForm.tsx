@@ -11,27 +11,25 @@ import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 const registerSchema = z.object({
   username: z
     .string()
-    .min(3, '사용자명은 최소 3자 이상이어야 합니다')
-    .max(20, '사용자명은 최대 20자까지 가능합니다')
-    .regex(/^[a-zA-Z0-9_]+$/, '사용자명은 영문, 숫자, 언더스코어만 사용 가능합니다'),
+    .min(1, '사용자명을 입력해주세요')
+    .max(50, '사용자명은 최대 50자까지 가능합니다'),
   email: z
     .string()
     .email('올바른 이메일 주소를 입력해주세요'),
   password: z
     .string()
-    .min(8, '비밀번호는 최소 8자 이상이어야 합니다')
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, '비밀번호는 대문자, 소문자, 숫자를 포함해야 합니다'),
+    .min(1, '비밀번호를 입력해주세요'),
   password_confirm: z
     .string()
     .min(1, '비밀번호 확인을 입력해주세요'),
   first_name: z
     .string()
     .min(1, '이름을 입력해주세요')
-    .max(30, '이름은 최대 30자까지 가능합니다'),
+    .max(50, '이름은 최대 50자까지 가능합니다'),
   last_name: z
     .string()
     .min(1, '성을 입력해주세요')
-    .max(30, '성은 최대 30자까지 가능합니다'),
+    .max(50, '성은 최대 50자까지 가능합니다'),
   terms: z
     .boolean()
     .refine((val) => val === true, '이용약관에 동의해주세요'),
@@ -116,7 +114,7 @@ export default function RegisterForm() {
             {...register('username')}
             type="text"
             autoComplete="username"
-            placeholder="사용자명 (영문, 숫자, _ 사용 가능)"
+            placeholder="사용자명"
             className={`mt-1 input-field ${errors.username ? 'border-red-500 focus:ring-red-500' : ''}`}
           />
           {errors.username && (
@@ -184,7 +182,7 @@ export default function RegisterForm() {
             {...register('password')}
             type={showPassword ? 'text' : 'password'}
             autoComplete="new-password"
-            placeholder="비밀번호 (8자 이상, 대소문자, 숫자 포함)"
+            placeholder="비밀번호"
             className={`mt-1 input-field pr-10 ${errors.password ? 'border-red-500 focus:ring-red-500' : ''}`}
           />
           <button

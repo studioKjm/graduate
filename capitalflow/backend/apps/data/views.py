@@ -437,14 +437,18 @@ class MetadataAPIView(APIView):
     
     def get(self, request):
         try:
+            from apps.data.models import DataSource
+            
             countries = Country.objects.filter(is_active=True)
             sectors = Sector.objects.filter(is_active=True)
             capital_types = CapitalType.objects.filter(is_active=True)
+            data_sources = DataSource.objects.filter(is_active=True)
             
             return Response({
                 'countries': [{'code': c.code, 'name': c.name} for c in countries],
                 'sectors': [{'code': s.code, 'name': s.name} for s in sectors],
-                'capital_types': [{'code': ct.code, 'name': ct.name} for ct in capital_types]
+                'capital_types': [{'code': ct.code, 'name': ct.name} for ct in capital_types],
+                'data_sources': [{'id': ds.id, 'name': ds.name, 'source_type': ds.source_type, 'reliability_weight': ds.reliability_weight} for ds in data_sources]
             })
             
         except Exception as e:
@@ -528,4 +532,324 @@ class NewsAPIView(APIView):
                 'error': 'Internal server error',
                 'details': str(e),
                 'success': False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CollectionStatsAPIView(APIView):
+    """수집 통계 API"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        """수집된 데이터의 상세 통계 제공"""
+        try:
+            from django.db.models import Count, Sum, Avg, Min, Max
+            from apps.data.models import RawCapitalData, ProcessedCapitalData, DataProcessingLog
+            
+            # 기본 통계
+            raw_count = RawCapitalData.objects.count()
+            processed_count = ProcessedCapitalData.objects.count()
+            
+            # 전체 가능한 조합 수 계산
+            total_countries = Country.objects.count()
+            total_sectors = Sector.objects.count()
+            total_capital_types = CapitalType.objects.count()
+            total_years = 5  # 2020-2024
+            total_possible_combinations = total_countries * total_sectors * total_capital_types * total_years
+            
+            # 연도별 수집 현황 (수집률 포함)
+            year_stats = list(
+                RawCapitalData.objects
+                .values('year')
+                .annotate(
+                    count=Count('id'),
+                    total_amount=Sum('amount_usd'),
+                    avg_amount=Avg('amount_usd')
+                )
+                .order_by('year')
+            )
+            
+            # 연도별 수집률 계산 (해당 연도의 고유한 조합 수 기준)
+            for year_stat in year_stats:
+                year = year_stat['year']
+                # 해당 연도에 실제로 존재하는 고유한 조합 수 계산
+                year_unique_combinations = RawCapitalData.objects.filter(year=year).values('country', 'sector', 'capital_type').distinct().count()
+                # 이론적 최대 조합 수 (모든 국가, 분야, 자본타입)
+                year_max_combinations = total_countries * total_sectors * total_capital_types
+                year_stat['collection_rate'] = round((year_unique_combinations / year_max_combinations * 100), 2) if year_max_combinations > 0 else 0
+            
+            # 국가별 수집 현황 (전체 국가, 수집률 포함)
+            country_stats = list(
+                RawCapitalData.objects
+                .values('country__name', 'country__code')
+                .annotate(
+                    count=Count('id'),
+                    total_amount=Sum('amount_usd'),
+                    avg_amount=Avg('amount_usd')
+                )
+                .order_by('-count')
+            )
+            
+            # 국가별 수집률 계산 (해당 국가의 고유한 조합 수 기준)
+            for country_stat in country_stats:
+                country_code = country_stat['country__code']
+                # 해당 국가에 실제로 존재하는 고유한 조합 수 계산
+                country_unique_combinations = RawCapitalData.objects.filter(country__code=country_code).values('sector', 'capital_type', 'year').distinct().count()
+                # 이론적 최대 조합 수 (모든 분야, 자본타입, 연도)
+                country_max_combinations = total_sectors * total_capital_types * total_years
+                country_stat['collection_rate'] = round((country_unique_combinations / country_max_combinations * 100), 2) if country_max_combinations > 0 else 0
+            
+            # 분야별 수집 현황 (수집률 포함)
+            sector_stats = list(
+                RawCapitalData.objects
+                .values('sector__name', 'sector__code')
+                .annotate(
+                    count=Count('id'),
+                    total_amount=Sum('amount_usd'),
+                    avg_amount=Avg('amount_usd')
+                )
+                .order_by('-count')
+            )
+            
+            # 분야별 수집률 계산 (해당 분야의 고유한 조합 수 기준)
+            for sector_stat in sector_stats:
+                sector_code = sector_stat['sector__code']
+                # 해당 분야에 실제로 존재하는 고유한 조합 수 계산
+                sector_unique_combinations = RawCapitalData.objects.filter(sector__code=sector_code).values('country', 'capital_type', 'year').distinct().count()
+                # 이론적 최대 조합 수 (모든 국가, 자본타입, 연도)
+                sector_max_combinations = total_countries * total_capital_types * total_years
+                sector_stat['collection_rate'] = round((sector_unique_combinations / sector_max_combinations * 100), 2) if sector_max_combinations > 0 else 0
+            
+            # 자본타입별 수집 현황 (수집률 포함)
+            capital_type_stats = list(
+                RawCapitalData.objects
+                .values('capital_type__name', 'capital_type__code')
+                .annotate(
+                    count=Count('id'),
+                    total_amount=Sum('amount_usd'),
+                    avg_amount=Avg('amount_usd')
+                )
+                .order_by('-count')
+            )
+            
+            # 자본타입별 수집률 계산 (해당 자본타입의 고유한 조합 수 기준)
+            for capital_type_stat in capital_type_stats:
+                capital_type_code = capital_type_stat['capital_type__code']
+                # 해당 자본타입에 실제로 존재하는 고유한 조합 수 계산
+                capital_type_unique_combinations = RawCapitalData.objects.filter(capital_type__code=capital_type_code).values('country', 'sector', 'year').distinct().count()
+                # 이론적 최대 조합 수 (모든 국가, 분야, 연도)
+                capital_type_max_combinations = total_countries * total_sectors * total_years
+                capital_type_stat['collection_rate'] = round((capital_type_unique_combinations / capital_type_max_combinations * 100), 2) if capital_type_max_combinations > 0 else 0
+            
+            # 소스별 수집 현황
+            source_stats = list(
+                RawCapitalData.objects
+                .values('source__name', 'source__source_type')
+                .annotate(
+                    count=Count('id'),
+                    total_amount=Sum('amount_usd'),
+                    avg_amount=Avg('amount_usd'),
+                    avg_quality=Avg('data_quality_score')
+                )
+                .order_by('-count')
+            )
+            
+            # 최근 처리 로그
+            recent_logs = DataProcessingLog.objects.order_by('-start_time')[:10]
+            log_data = []
+            for log in recent_logs:
+                log_data.append({
+                    'id': str(log.id),
+                    'start_time': log.start_time.isoformat() if log.start_time else None,
+                    'end_time': log.end_time.isoformat() if log.end_time else None,
+                    'duration_seconds': log.duration_seconds,
+                    'status': log.status,
+                    'records_processed': log.records_processed,
+                    'records_success': log.records_success,
+                    'records_failed': log.records_failed,
+                    'error_message': log.error_message
+                })
+            
+            # 누락된 데이터 분석
+            missing_data = self._analyze_missing_data()
+            
+            # 전체 통계 계산
+            total_collected = raw_count
+            total_processed = processed_count
+            success_rate = (total_processed / total_collected * 100) if total_collected > 0 else 0
+            
+            # 전체 수집률 계산 (고유한 조합 수 기준)
+            actual_unique_combinations = RawCapitalData.objects.values('country', 'sector', 'capital_type', 'year').distinct().count()
+            overall_collection_rate = round((actual_unique_combinations / total_possible_combinations * 100), 2) if total_possible_combinations > 0 else 0
+            
+            # 평균 처리 시간 계산
+            avg_processing_time = 0
+            if recent_logs.exists():
+                total_duration = sum(log.duration_seconds or 0 for log in recent_logs)
+                avg_processing_time = total_duration / recent_logs.count()
+            
+            return Response({
+                'success': True,
+                'summary': {
+                    'total_collected': total_collected,
+                    'total_processed': total_processed,
+                    'success_rate': round(success_rate, 2),
+                    'avg_processing_time': round(avg_processing_time, 2),
+                    'overall_collection_rate': overall_collection_rate,
+                    'total_possible_combinations': total_possible_combinations,
+                    'actual_unique_combinations': actual_unique_combinations,
+                    'last_collection': log_data[0]['start_time'] if log_data else None
+                },
+                'year_stats': year_stats,
+                'country_stats': country_stats,
+                'sector_stats': sector_stats,
+                'capital_type_stats': capital_type_stats,
+                'source_stats': source_stats,
+                'recent_logs': log_data,
+                'missing_data': missing_data
+            })
+            
+        except Exception as e:
+            logger.error(f"Collection stats API error: {e}")
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _analyze_missing_data(self):
+        """누락된 데이터 분석"""
+        from apps.data.models import Country, Sector, CapitalType, RawCapitalData
+        
+        # 모든 가능한 조합 생성
+        countries = Country.objects.filter(is_active=True)[:10]  # 상위 10개국만
+        sectors = Sector.objects.filter(is_active=True).exclude(code='ALL')[:5]  # 상위 5개 분야
+        capital_types = CapitalType.objects.filter(is_active=True)[:5]  # 상위 5개 자본타입
+        years = [2020, 2021, 2022, 2023, 2024]
+        
+        missing_combinations = []
+        
+        for country in countries:
+            for sector in sectors:
+                for capital_type in capital_types:
+                    for year in years:
+                        exists = RawCapitalData.objects.filter(
+                            country=country,
+                            sector=sector,
+                            capital_type=capital_type,
+                            year=year
+                        ).exists()
+                        
+                        if not exists:
+                            missing_combinations.append({
+                                'country': country.name,
+                                'country_code': country.code,
+                                'sector': sector.name,
+                                'sector_code': sector.code,
+                                'capital_type': capital_type.name,
+                                'capital_type_code': capital_type.code,
+                                'year': year
+                            })
+        
+        return missing_combinations[:50]  # 최대 50개만 반환
+
+
+class RawDataCollectionAPIView(APIView):
+    """원시데이터 수집 API"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        """원시데이터 수집 실행"""
+        try:
+            from apps.data.services.data_collectors import DataCollectionService
+            from apps.data.models import Country, Sector, CapitalType, DataSource
+            
+            # 요청 데이터 파싱
+            data = request.data
+            countries = data.get('countries', [])
+            sectors = data.get('sectors', [])
+            capital_types = data.get('capital_types', [])
+            years = data.get('years', [])
+            sources = data.get('sources', [])
+            
+            # 기본값 설정
+            if not countries:
+                countries = list(Country.objects.filter(is_active=True).values_list('code', flat=True))
+            if not sectors:
+                sectors = list(Sector.objects.filter(is_active=True).exclude(code='ALL').values_list('code', flat=True))
+            if not capital_types:
+                capital_types = list(CapitalType.objects.filter(is_active=True).values_list('code', flat=True))
+            if not years:
+                years = [2020, 2021, 2022, 2023, 2024]
+            if not sources:
+                sources = list(DataSource.objects.filter(is_active=True).values_list('name', flat=True))
+            
+            # 수집 서비스 초기화
+            collection_service = DataCollectionService()
+            
+            # 수집 실행
+            results = {
+                'collected': 0,
+                'failed': 0,
+                'details': []
+            }
+            
+            for source_name in sources:
+                try:
+                    source = DataSource.objects.get(name=source_name)
+                    for year in years:
+                        for country_code in countries:
+                            for sector_code in sectors:
+                                for capital_type_code in capital_types:
+                                    try:
+                                        # 데이터 수집 실행
+                                        collected_data = collection_service.collect_source(
+                                            source_name=source_name,
+                                            year=year,
+                                            country_code=country_code,
+                                            sector_code=sector_code,
+                                            capital_type_code=capital_type_code
+                                        )
+                                        
+                                        if collected_data and collected_data > 0:
+                                            results['collected'] += collected_data
+                                            results['details'].append({
+                                                'source': source_name,
+                                                'year': year,
+                                                'country': country_code,
+                                                'sector': sector_code,
+                                                'capital_type': capital_type_code,
+                                                'count': collected_data
+                                            })
+                                        else:
+                                            results['failed'] += 1
+                                            
+                                    except Exception as e:
+                                        results['failed'] += 1
+                                        results['details'].append({
+                                            'source': source_name,
+                                            'year': year,
+                                            'country': country_code,
+                                            'sector': sector_code,
+                                            'capital_type': capital_type_code,
+                                            'error': str(e)
+                                        })
+                                        
+                                    except Exception as e:
+                                        logger.error(f"Raw data collection error: {e}")
+                                        results['failed'] += 1
+                                        
+                except Exception as e:
+                    logger.error(f"Source collection error: {e}")
+                    results['failed'] += 1
+                                    
+            return Response({
+                'success': True,
+                'message': f'원시데이터 수집 완료: {results["collected"]}개 수집, {results["failed"]}개 실패',
+                'results': results
+            })
+            
+        except Exception as e:
+            logger.error(f"Raw data collection API error: {e}")
+            return Response({
+                'success': False,
+                'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

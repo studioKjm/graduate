@@ -523,6 +523,7 @@ class DataQualityAnalysisAPIView(APIView):
                                 })
             
             return Response({
+                'success': True,
                 'totalRecords': total_records,
                 'bySource': by_source,
                 'byCountry': by_country,

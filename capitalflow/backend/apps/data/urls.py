@@ -28,9 +28,11 @@ urlpatterns = [
     
     # 관리자용 API (데이터 처리)
     path('admin/collect/', views.DataCollectionAPIView.as_view(), name='admin-collect'),
+    path('admin/raw-collect/', views.RawDataCollectionAPIView.as_view(), name='admin-raw-collect'),
     path('admin/fusion/', views.DataFusionAPIView.as_view(), name='admin-fusion'),
     path('admin/validate/', views.DataValidationAPIView.as_view(), name='admin-validate'),
     path('admin/logs/', views.ProcessingLogsAPIView.as_view(), name='admin-logs'),
+    path('admin/collection-stats/', views.CollectionStatsAPIView.as_view(), name='admin-collection-stats'),
     
     # 데이터 파이프라인 가시성 API
     path('pipeline/overview/', DataPipelineOverviewAPIView.as_view(), name='pipeline-overview'),
