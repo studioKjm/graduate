@@ -148,20 +148,9 @@ class BISCollector:
             # 더미 구현 (실제로는 BIS CSV 파일 파싱)
             results = []
             
-            # 주요국의 국제 은행 자본 흐름 시뮬레이션
-            major_countries = ['USA', 'CHN', 'JPN', 'DEU', 'GBR', 'FRA']
-            
-            for country in major_countries:
-                # 실제로는 BIS 데이터에서 추출
-                amount = 50_000_000_000 + (hash(f"{country}{year}") % 100_000_000_000)
-                
-                results.append({
-                    'country_code': country,
-                    'amount_usd': amount,
-                    'year': year,
-                    'indicator': 'BANKING_FLOWS',
-                    'raw_data': {'source': 'BIS', 'type': 'banking_flows'}
-                })
+            # 실제 BIS 데이터 수집 시도 (더미 데이터 생성하지 않음)
+            logger.info(f"BIS 실제 데이터 수집 시도: {year}")
+            # 실제 BIS API 호출 로직 구현 필요
             
             logger.info(f"BIS 은행 자본 흐름 데이터 수집 완료: {len(results)}건")
             return results
@@ -196,16 +185,9 @@ class FedCollector:
                 'BANKING': 100_000_000_000
             }
             
-            for indicator, base_amount in indicators.items():
-                amount = base_amount + (hash(f"US{indicator}{year}") % 50_000_000_000)
-                
-                results.append({
-                    'country_code': 'USA',
-                    'amount_usd': amount,
-                    'year': year,
-                    'indicator': indicator,
-                    'raw_data': {'source': 'FRED', 'series': indicator}
-                })
+            # 실제 FRED API 데이터 수집 시도 (더미 데이터 생성하지 않음)
+            logger.info(f"FRED 실제 데이터 수집 시도: {year}")
+            # 실제 FRED API 호출 로직 구현 필요
             
             logger.info(f"FRED 미국 자본 흐름 데이터 수집 완료: {len(results)}건")
             return results
@@ -240,16 +222,9 @@ class BOKCollector:
                 'PORTFOLIO_OUTWARD': 25_000_000_000
             }
             
-            for item, base_amount in capital_items.items():
-                amount = base_amount + (hash(f"KOR{item}{year}") % 10_000_000_000)
-                
-                results.append({
-                    'country_code': 'KOR',
-                    'amount_usd': amount,
-                    'year': year,
-                    'indicator': item,
-                    'raw_data': {'source': 'BOK_ECOS', 'item': item}
-                })
+            # 실제 한국은행 데이터 수집 시도 (더미 데이터 생성하지 않음)
+            logger.info(f"한국은행 실제 데이터 수집 시도: {year}")
+            # 실제 한국은행 API 호출 로직 구현 필요
             
             logger.info(f"한국은행 자본 흐름 데이터 수집 완료: {len(results)}건")
             return results
@@ -283,18 +258,9 @@ class UNCTADCollector:
                 ('GBR', 120_000_000_000), ('FRA', 100_000_000_000)
             ]
             
-            for country, base_amount in major_economies:
-                # 연도별 변동 시뮬레이션
-                variation = (hash(f"{country}{year}") % 50_000_000_000) - 25_000_000_000
-                final_amount = max(base_amount + variation, 10_000_000_000)
-                
-                results.append({
-                    'country_code': country,
-                    'amount_usd': final_amount,
-                    'year': year,
-                    'indicator': 'FDI_FLOWS',
-                    'raw_data': {'source': 'UNCTAD_WIR', 'type': 'annual_report'}
-                })
+            # 실제 UNCTAD 데이터 수집 시도 (더미 데이터 생성하지 않음)
+            logger.info(f"UNCTAD 실제 데이터 수집 시도: {year}")
+            # 실제 UNCTAD API 호출 로직 구현 필요
             
             logger.info(f"UNCTAD 글로벌 FDI 데이터 수집 완료: {len(results)}건")
             return results

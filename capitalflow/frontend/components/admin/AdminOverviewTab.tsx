@@ -115,10 +115,10 @@ export default function AdminOverviewTab({
         )}
       </div>
 
-      {/* 실시간 데이터 수집 모니터링 */}
+      {/* 데이터 품질 분석 섹션 */}
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-medium text-gray-900">빠른 액션</h3>
+          <h3 className="text-lg font-medium text-gray-900">데이터 품질 분석</h3>
           {lastUpdated && (
             <span className="text-sm text-gray-500">
               마지막 업데이트: {lastUpdated}
@@ -126,53 +126,6 @@ export default function AdminOverviewTab({
           )}
         </div>
 
-        {/* 실시간 데이터 수집 모니터링 대시보드 */}
-        <div className="mb-6 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="text-lg font-semibold text-gray-900">실시간 데이터 수집 모니터링</h4>
-            <div className="flex items-center space-x-2">
-              <div className={`w-3 h-3 rounded-full ${
-                collectionProgress.status === 'idle' ? 'bg-gray-400' :
-                collectionProgress.status === 'collecting' ? 'bg-yellow-400 animate-pulse' :
-                collectionProgress.status === 'processing' ? 'bg-blue-400 animate-pulse' :
-                collectionProgress.status === 'completed' ? 'bg-green-400' :
-                'bg-red-400'
-              }`}></div>
-              <span className="text-sm font-medium text-gray-700">
-                {collectionProgress.status === 'idle' ? '대기 중' :
-                collectionProgress.status === 'collecting' ? '수집 중' :
-                collectionProgress.status === 'processing' ? '처리 중' :
-                collectionProgress.status === 'completed' ? '완료' :
-                '오류'}
-              </span>
-            </div>
-          </div>
-
-          {/* 수집 진행률 바 */}
-          {collectionProgress.status !== 'idle' && (
-            <div className="mb-4">
-              <div className="flex justify-between text-sm text-gray-600 mb-2">
-                <span>{collectionProgress.source} 소스 수집 중...</span>
-                <span>{collectionProgress.current}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className={`h-2 rounded-full transition-all duration-300 ${
-                    collectionProgress.status === 'completed' ? 'bg-green-500' :
-                    collectionProgress.status === 'error' ? 'bg-red-500' :
-                    'bg-blue-500'
-                  }`}
-                  style={{ width: `${collectionProgress.current}%` }}
-                ></div>
-              </div>
-              {collectionProgress.startTime && (
-                <div className="text-xs text-gray-500 mt-1">
-                  경과 시간: {Math.floor((Date.now() - collectionProgress.startTime) / 1000)}초
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
         {/* 데이터 품질 분석 및 종합 요약 대시보드 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -292,11 +245,15 @@ export default function AdminOverviewTab({
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">수집률</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">총 금액</th>
                               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">평균 금액</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">데이터 타입</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">융합률</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">신뢰도</th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상세</th>
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
                             {detailedStats.yearStats.map((stat, index) => (
-                              <tr key={index}>
+                              <tr key={index} className="hover:bg-gray-50">
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{stat.year}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{stat.count.toLocaleString()}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -310,8 +267,62 @@ export default function AdminOverviewTab({
                                     <span className="text-sm font-medium">{(stat.collection_rate || 0).toFixed(1)}%</span>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(stat.total_amount || 0).toLocaleString()}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(stat.avg_amount || 0).toLocaleString()}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  <div className="group relative">
+                                    <span className="cursor-pointer hover:text-blue-600">
+                                      {stat.total_amount_formatted || `$${(stat.total_amount || 0).toLocaleString()}`}
+                                    </span>
+                                    <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                                      ${(stat.total_amount || 0).toLocaleString()}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  <div className="group relative">
+                                    <span className="cursor-pointer hover:text-blue-600">
+                                      {stat.avg_amount_formatted || `$${(stat.avg_amount || 0).toLocaleString()}`}
+                                    </span>
+                                    <div className="absolute bottom-full left-0 mb-2 px-3 py-2 bg-gray-800 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">
+                                      ${(stat.avg_amount || 0).toLocaleString()}
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                    stat.data_type === '더미 데이터' 
+                                      ? 'bg-yellow-100 text-yellow-800' 
+                                      : 'bg-green-100 text-green-800'
+                                  }`}>
+                                    {stat.data_type || 'N/A'}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {stat.fusion_status ? `${stat.fusion_status.fusion_rate}%` : 'N/A'}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  {stat.confidence_display || (stat.avg_quality ? `${stat.avg_quality}%` : 'N/A')}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                  <button
+                                    onClick={() => {
+                                      // 상세 정보 모달 표시
+                                      const details = {
+                                        year: stat.year,
+                                        dataType: stat.data_type,
+                                        fusionStatus: stat.fusion_status,
+                                        sourceStats: stat.source_stats,
+                                        avgQuality: stat.avg_quality,
+                                        uniqueCombinations: stat.unique_combinations,
+                                        maxCombinations: stat.max_combinations
+                                      }
+                                      console.log('상세 정보:', details)
+                                      alert(`상세 정보:\n\n데이터 타입: ${stat.data_type || 'N/A'}\n융합률: ${stat.fusion_status?.fusion_rate || 0}%\n신뢰도: ${stat.avg_quality || 0}%\n고유 조합: ${stat.unique_combinations || 0}/${stat.max_combinations || 0}\n\n자세한 내용은 콘솔을 확인하세요.`)
+                                    }}
+                                    className="text-blue-600 hover:text-blue-800 font-medium"
+                                  >
+                                    보기
+                                  </button>
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -468,10 +479,10 @@ export default function AdminOverviewTab({
             {/* 누락된 데이터 분석 */}
             {detailedStats.missingData.length > 0 && (
               <div className="bg-white p-6 rounded-lg shadow border">
-                <h4 className="text-lg font-semibold text-gray-900 mb-4">누락된 데이터 분석 (상위 20개)</h4>
-                <div className="overflow-x-auto">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">누락된 데이터 분석 (전체 {detailedStats.missingData.length}개)</h4>
+                <div className="overflow-x-auto max-h-96">
                   <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gray-50 sticky top-0">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">국가</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">분야</th>
@@ -480,8 +491,8 @@ export default function AdminOverviewTab({
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {detailedStats.missingData.slice(0, 20).map((missing, index) => (
-                        <tr key={index}>
+                      {detailedStats.missingData.map((missing, index) => (
+                        <tr key={index} className="hover:bg-gray-50">
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{missing.country}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{missing.sector}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{missing.capital_type}</td>
@@ -496,48 +507,6 @@ export default function AdminOverviewTab({
           </div>
         )}
 
-        {/* 빠른 액션 버튼들 */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button
-            onClick={() => {
-              console.log('수동 새로고침 시작...')
-              fetchSystemStats()
-              fetchMetadata()
-              fetchProcessingLogs()
-              fetchDataQuality()
-              fetchCollectionStats()
-              addToast({
-                type: 'info',
-                title: '데이터 새로고침',
-                message: '모든 데이터를 다시 불러왔습니다.'
-              })
-            }}
-            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center"
-          >
-            🔄 데이터 새로고침
-          </button>
-          <button
-            onClick={executeDataFusion}
-            disabled={loading}
-            className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center"
-          >
-            {loading ? '처리중...' : '데이터 융합 실행'}
-          </button>
-          <button
-            onClick={() => {
-              fetchDataQuality()
-              fetchCollectionStats()
-              addToast({
-                type: 'info',
-                title: '분석 새로고침',
-                message: '데이터 품질 분석을 업데이트했습니다.'
-              })
-            }}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors flex items-center justify-center"
-          >
-            📊 분석 새로고침
-          </button>
-        </div>
       </div>
     </div>
   )

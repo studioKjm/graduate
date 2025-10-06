@@ -263,20 +263,38 @@ export default function AdminPage() {
   }
 
   // 데이터 융합 실행
-  const executeDataFusion = async () => {
+  const executeDataFusion = async (fusionSettings?: any) => {
     setLoading(true)
     try {
+      const body = fusionSettings ? {
+        year_start: fusionSettings.yearStart,
+        year_end: fusionSettings.yearEnd,
+        mode: fusionSettings.mode
+      } : { year: 2023 }
+      
+      console.log('융합 요청:', body)
+      
       const response = await fetch(`${API_BASE_URL}/admin/fusion/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year: 2023 })
+        body: JSON.stringify(body)
       })
       const result = await response.json()
-      addToast({
-        type: 'success',
-        title: '데이터 융합 완료',
-        message: `융합: ${result.results?.fused || 0}개, 업데이트: ${result.results?.updated || 0}개`
-      })
+      
+      if (result.success) {
+        addToast({
+          type: 'success',
+          title: '데이터 융합 완료',
+          message: `처리: ${result.results?.processed || 0}개, 생성: ${result.results?.created || 0}개, 업데이트: ${result.results?.updated || 0}개`
+        })
+      } else {
+        addToast({
+          type: 'error',
+          title: '데이터 융합 실패',
+          message: result.error || '알 수 없는 오류가 발생했습니다.'
+        })
+      }
+      
       fetchProcessingLogs()
       fetchSystemStats()
     } catch (error) {

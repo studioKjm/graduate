@@ -80,10 +80,11 @@ class DataQualityAssessor:
     
     @staticmethod
     def calculate_quality_score(
-        raw_data: RawCapitalData,
-        source_reliability: float,
+        raw_data: RawCapitalData = None,
+        source_reliability: float = 0.8,
         is_outlier: bool = False,
-        completeness_score: float = 1.0
+        completeness_score: float = 1.0,
+        year: int = None
     ) -> float:
         """데이터 품질 점수 계산"""
         
@@ -98,7 +99,8 @@ class DataQualityAssessor:
         
         # 최신성 점수 (최근 데이터일수록 높은 점수)
         current_year = datetime.now().year
-        age_penalty = max(0, (current_year - raw_data.year) * 0.01)
+        data_year = year if year else (raw_data.year if raw_data else current_year)
+        age_penalty = max(0, (current_year - data_year) * 0.01)
         
         # 최종 점수 계산
         final_score = base_score + completeness_bonus - outlier_penalty - age_penalty
@@ -174,13 +176,12 @@ class DataFusionService:
         """특정 조건의 자본 데이터 융합"""
         
         try:
-            # 해당 조건의 모든 원시 데이터 조회
+            # 해당 조건의 모든 원시 데이터 조회 (is_verified 필터 제거)
             raw_data_qs = RawCapitalData.objects.filter(
                 country__code=country_code,
                 sector__code=sector_code,
                 capital_type__code=capital_type_code,
-                year=year,
-                is_verified=True
+                year=year
             ).select_related('source', 'country', 'sector', 'capital_type')
             
             if not raw_data_qs.exists():
@@ -461,32 +462,48 @@ class DataFusionService:
             
             logger.info(f"배치 융합 시작: {total_combinations}개 조합 처리 예정")
             
-            # 각 조합별 융합 수행
-            for country in countries:
-                for sector in sectors:
-                    for capital_type in capital_types:
-                        for year in range(year_start, year_end + 1):
-                            try:
-                                processed_data = self.fuse_capital_data(
-                                    country.code, sector.code, capital_type.code, year
-                                )
-                                
-                                if processed_data:
-                                    # 생성/업데이트 상태 확인
-                                    if hasattr(processed_data, '_was_created') and processed_data._was_created:
-                                        results['created'] += 1
-                                    else:
-                                        results['updated'] += 1
-                                    
-                                results['processed'] += 1
-                                
-                                # 진행상황 로그 (1000개마다)
-                                if results['processed'] % 1000 == 0:
-                                    logger.info(f"융합 진행률: {results['processed']}/{total_combinations}")
-                                
-                            except Exception as e:
-                                results['failed'] += 1
-                                logger.error(f"융합 실패: {country.code}-{sector.code}-{capital_type.code}-{year}, 오류: {e}")
+            # 원시데이터가 있는 조합만 융합 수행
+            raw_data_combinations = RawCapitalData.objects.filter(
+                year__gte=year_start,
+                year__lte=year_end
+            ).values('country', 'sector', 'capital_type', 'year').distinct()
+            
+            if country_codes:
+                raw_data_combinations = raw_data_combinations.filter(country__code__in=country_codes)
+            if sector_codes:
+                raw_data_combinations = raw_data_combinations.filter(sector__code__in=sector_codes)
+            
+            actual_combinations = raw_data_combinations.count()
+            logger.info(f"실제 융합 대상: {actual_combinations}개 조합")
+            
+            for combo in raw_data_combinations:
+                try:
+                    # ID가 아닌 코드로 조회
+                    country = Country.objects.get(code=combo['country'])
+                    sector = Sector.objects.get(code=combo['sector'])
+                    capital_type = CapitalType.objects.get(code=combo['capital_type'])
+                    year = combo['year']
+                    
+                    processed_data = self.fuse_capital_data(
+                        country.code, sector.code, capital_type.code, year
+                    )
+                    
+                    if processed_data:
+                        # 생성/업데이트 상태 확인
+                        if hasattr(processed_data, '_was_created') and processed_data._was_created:
+                            results['created'] += 1
+                        else:
+                            results['updated'] += 1
+                        
+                    results['processed'] += 1
+                    
+                    # 진행상황 로그 (1000개마다)
+                    if results['processed'] % 1000 == 0:
+                        logger.info(f"융합 진행률: {results['processed']}/{actual_combinations}")
+                    
+                except Exception as e:
+                    results['failed'] += 1
+                    logger.error(f"융합 실패: {combo}, 오류: {e}")
             
             # 로그 완료
             log_entry.end_time = timezone.now()
@@ -507,6 +524,257 @@ class DataFusionService:
             log_entry.save()
             
             logger.error(f"배치 융합 실패: {e}")
+            raise
+        
+        return results
+
+    def batch_fusion_incremental(
+        self, 
+        year_start: int = 2020, 
+        year_end: int = 2024
+    ) -> Dict[str, int]:
+        """증분 융합: 새로 수집된 원시데이터만 융합"""
+        
+        results = {
+            'processed': 0,
+            'created': 0,
+            'updated': 0,
+            'failed': 0
+        }
+        
+        # 로그 시작
+        log_entry = DataProcessingLog.objects.create(
+            processing_type='FUSION_INCREMENTAL',
+            status='PARTIAL',
+            year_start=year_start,
+            year_end=year_end,
+            start_time=timezone.now()
+        )
+        
+        try:
+            # 최근 1시간 내에 수집된 원시데이터만 찾기
+            from datetime import timedelta
+            recent_time = timezone.now() - timedelta(hours=1)
+            
+            recent_raw_data = RawCapitalData.objects.filter(
+                collection_date__gte=recent_time,
+                year__gte=year_start,
+                year__lte=year_end,
+                is_verified=True
+            ).values('country__code', 'sector__code', 'capital_type__code', 'year').distinct()
+            
+            total_combinations = recent_raw_data.count()
+            logger.info(f"증분 융합 시작: {total_combinations}개 새 조합 처리 예정")
+            
+            if total_combinations == 0:
+                logger.info("새로 수집된 데이터가 없어 융합을 건너뜁니다.")
+                return results
+            
+            # 새로 수집된 조합들만 융합
+            for data in recent_raw_data:
+                try:
+                    processed_data = self.fuse_capital_data(
+                        data['country__code'], 
+                        data['sector__code'], 
+                        data['capital_type__code'], 
+                        data['year']
+                    )
+                    
+                    if processed_data:
+                        # 생성/업데이트 상태 확인
+                        if hasattr(processed_data, '_was_created') and processed_data._was_created:
+                            results['created'] += 1
+                        else:
+                            results['updated'] += 1
+                        
+                    results['processed'] += 1
+                    
+                    # 진행상황 로그 (100개마다)
+                    if results['processed'] % 100 == 0:
+                        logger.info(f"증분 융합 진행률: {results['processed']}/{total_combinations}")
+                    
+                except Exception as e:
+                    results['failed'] += 1
+                    logger.error(f"증분 융합 실패: {data}, 오류: {e}")
+            
+            # 로그 완료
+            log_entry.end_time = timezone.now()
+            log_entry.status = 'SUCCESS'
+            log_entry.records_processed = results['processed']
+            log_entry.records_success = results['created'] + results['updated']
+            log_entry.records_failed = results['failed']
+            log_entry.duration_seconds = (log_entry.end_time - log_entry.start_time).total_seconds()
+            log_entry.save()
+            
+            logger.info(f"증분 융합 완료: {results}")
+            
+        except Exception as e:
+            # 실패 로그
+            log_entry.end_time = timezone.now()
+            log_entry.status = 'FAILED'
+            log_entry.error_message = str(e)
+            log_entry.save()
+            
+            logger.error(f"증분 융합 실패: {e}")
+            raise
+        
+        return results
+
+    def find_unfused_data(
+        self, 
+        year_start: int = 2020, 
+        year_end: int = 2024
+    ) -> Dict[str, Any]:
+        """융합되지 않은 데이터 찾기"""
+        
+        try:
+            # 원시데이터 조회 (is_verified 필터 제거)
+            raw_data = RawCapitalData.objects.filter(
+                year__gte=year_start,
+                year__lte=year_end
+            ).values('country__code', 'sector__code', 'capital_type__code', 'year').distinct()
+            
+            # 처리된 데이터 조회
+            processed_data = ProcessedCapitalData.objects.filter(
+                year__gte=year_start,
+                year__lte=year_end
+            ).values('country__code', 'sector__code', 'capital_type__code', 'year').distinct()
+            
+            # 융합되지 않은 조합 찾기
+            raw_combinations = set()
+            for data in raw_data:
+                key = f"{data['country__code']}-{data['sector__code']}-{data['capital_type__code']}-{data['year']}"
+                raw_combinations.add(key)
+            
+            processed_combinations = set()
+            for data in processed_data:
+                key = f"{data['country__code']}-{data['sector__code']}-{data['capital_type__code']}-{data['year']}"
+                processed_combinations.add(key)
+            
+            # 융합되지 않은 조합
+            unfused_combinations = raw_combinations - processed_combinations
+            
+            # 통계 계산
+            total_raw = len(raw_combinations)
+            total_processed = len(processed_combinations)
+            total_unfused = len(unfused_combinations)
+            fusion_rate = (total_processed / total_raw * 100) if total_raw > 0 else 0
+            
+            # 융합되지 않은 데이터 상세 정보
+            unfused_details = []
+            for combination in sorted(unfused_combinations):
+                parts = combination.split('-')
+                if len(parts) == 4:
+                    country_code, sector_code, capital_type_code, year = parts
+                    unfused_details.append({
+                        'country_code': country_code,
+                        'sector_code': sector_code,
+                        'capital_type_code': capital_type_code,
+                        'year': int(year)
+                    })
+            
+            return {
+                'total_raw_combinations': total_raw,
+                'total_processed_combinations': total_processed,
+                'total_unfused_combinations': total_unfused,
+                'fusion_rate': round(fusion_rate, 2),
+                'unfused_details': unfused_details[:100],  # 최대 100개만 반환
+                'has_more': len(unfused_combinations) > 100
+            }
+            
+        except Exception as e:
+            logger.error(f"융합되지 않은 데이터 찾기 실패: {e}")
+            return {
+                'total_raw_combinations': 0,
+                'total_processed_combinations': 0,
+                'total_unfused_combinations': 0,
+                'fusion_rate': 0,
+                'unfused_details': [],
+                'has_more': False,
+                'error': str(e)
+            }
+
+    def batch_fusion_unfused_only(
+        self, 
+        year_start: int = 2020, 
+        year_end: int = 2024
+    ) -> Dict[str, int]:
+        """융합되지 않은 데이터만 융합"""
+        
+        results = {
+            'processed': 0,
+            'created': 0,
+            'updated': 0,
+            'failed': 0
+        }
+        
+        # 로그 시작
+        log_entry = DataProcessingLog.objects.create(
+            processing_type='FUSION_UNFUSED_ONLY',
+            status='PARTIAL',
+            year_start=year_start,
+            year_end=year_end,
+            start_time=timezone.now()
+        )
+        
+        try:
+            # 융합되지 않은 데이터 찾기
+            unfused_info = self.find_unfused_data(year_start, year_end)
+            unfused_combinations = unfused_info['unfused_details']
+            
+            total_combinations = len(unfused_combinations)
+            logger.info(f"융합되지 않은 데이터 융합 시작: {total_combinations}개 조합 처리 예정")
+            
+            if total_combinations == 0:
+                logger.info("융합되지 않은 데이터가 없습니다.")
+                return results
+            
+            # 융합되지 않은 조합들만 융합
+            for combination in unfused_combinations:
+                try:
+                    processed_data = self.fuse_capital_data(
+                        combination['country_code'], 
+                        combination['sector_code'], 
+                        combination['capital_type_code'], 
+                        combination['year']
+                    )
+                    
+                    if processed_data:
+                        # 생성/업데이트 상태 확인
+                        if hasattr(processed_data, '_was_created') and processed_data._was_created:
+                            results['created'] += 1
+                        else:
+                            results['updated'] += 1
+                        
+                    results['processed'] += 1
+                    
+                    # 진행상황 로그 (100개마다)
+                    if results['processed'] % 100 == 0:
+                        logger.info(f"융합되지 않은 데이터 융합 진행률: {results['processed']}/{total_combinations}")
+                    
+                except Exception as e:
+                    results['failed'] += 1
+                    logger.error(f"융합되지 않은 데이터 융합 실패: {combination}, 오류: {e}")
+            
+            # 로그 완료
+            log_entry.end_time = timezone.now()
+            log_entry.status = 'SUCCESS'
+            log_entry.records_processed = results['processed']
+            log_entry.records_success = results['created'] + results['updated']
+            log_entry.records_failed = results['failed']
+            log_entry.duration_seconds = (log_entry.end_time - log_entry.start_time).total_seconds()
+            log_entry.save()
+            
+            logger.info(f"융합되지 않은 데이터 융합 완료: {results}")
+            
+        except Exception as e:
+            # 실패 로그
+            log_entry.end_time = timezone.now()
+            log_entry.status = 'FAILED'
+            log_entry.error_message = str(e)
+            log_entry.save()
+            
+            logger.error(f"융합되지 않은 데이터 융합 실패: {e}")
             raise
         
         return results
