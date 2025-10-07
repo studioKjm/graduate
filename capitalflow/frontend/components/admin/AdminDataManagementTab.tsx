@@ -337,6 +337,97 @@ export default function AdminDataManagementTab({
                   </div>
                 </div>
               )}
+
+              {/* 수집된 데이터 상세 정보 */}
+              {collectionResults.collected_details && (
+                <div className="mb-4">
+                  <h6 className="font-medium text-gray-700 mb-2">수집된 데이터 상세 정보</h6>
+                  
+                  {/* 소스별 상세 정보 */}
+                  {collectionResults.collected_details.source_summary && (
+                    <div className="mb-4">
+                      <h7 className="font-medium text-gray-600 mb-2">소스별 상세</h7>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {Object.entries(collectionResults.collected_details.source_summary).map(([source, data]: [string, any]) => (
+                          <div key={source} className="bg-white p-3 rounded border">
+                            <div className="font-medium text-sm mb-2">{source}</div>
+                            <div className="text-xs space-y-1">
+                              <div>수집 건수: {data.count}개</div>
+                              <div>총 금액: ${(data.total_amount / 1000000000).toFixed(2)}B</div>
+                              <div>국가: {data.countries?.join(', ') || 'N/A'}</div>
+                              <div>분야: {data.sectors?.join(', ') || 'N/A'}</div>
+                              <div>자본타입: {data.capital_types?.join(', ') || 'N/A'}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 국가별 상세 정보 */}
+                  {collectionResults.collected_details.country_summary && (
+                    <div className="mb-4">
+                      <h7 className="font-medium text-gray-600 mb-2">국가별 상세</h7>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {Object.entries(collectionResults.collected_details.country_summary).slice(0, 10).map(([country, data]: [string, any]) => (
+                          <div key={country} className="bg-white p-3 rounded border">
+                            <div className="font-medium text-sm mb-2">{country}</div>
+                            <div className="text-xs space-y-1">
+                              <div>수집 건수: {data.count}개</div>
+                              <div>총 금액: ${(data.total_amount / 1000000000).toFixed(2)}B</div>
+                              <div>소스: {data.sources?.join(', ') || 'N/A'}</div>
+                              <div>분야: {data.sectors?.join(', ') || 'N/A'}</div>
+                              <div>자본타입: {data.capital_types?.join(', ') || 'N/A'}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 분야별 상세 정보 */}
+                  {collectionResults.collected_details.sector_summary && (
+                    <div className="mb-4">
+                      <h7 className="font-medium text-gray-600 mb-2">분야별 상세</h7>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {Object.entries(collectionResults.collected_details.sector_summary).map(([sector, data]: [string, any]) => (
+                          <div key={sector} className="bg-white p-3 rounded border">
+                            <div className="font-medium text-sm mb-2">{sector}</div>
+                            <div className="text-xs space-y-1">
+                              <div>수집 건수: {data.count}개</div>
+                              <div>총 금액: ${(data.total_amount / 1000000000).toFixed(2)}B</div>
+                              <div>소스: {data.sources?.join(', ') || 'N/A'}</div>
+                              <div>국가: {data.countries?.join(', ') || 'N/A'}</div>
+                              <div>자본타입: {data.capital_types?.join(', ') || 'N/A'}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 자본타입별 상세 정보 */}
+                  {collectionResults.collected_details.capital_type_summary && (
+                    <div className="mb-4">
+                      <h7 className="font-medium text-gray-600 mb-2">자본타입별 상세</h7>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {Object.entries(collectionResults.collected_details.capital_type_summary).map(([capitalType, data]: [string, any]) => (
+                          <div key={capitalType} className="bg-white p-3 rounded border">
+                            <div className="font-medium text-sm mb-2">{capitalType}</div>
+                            <div className="text-xs space-y-1">
+                              <div>수집 건수: {data.count}개</div>
+                              <div>총 금액: ${(data.total_amount / 1000000000).toFixed(2)}B</div>
+                              <div>소스: {data.sources?.join(', ') || 'N/A'}</div>
+                              <div>국가: {data.countries?.join(', ') || 'N/A'}</div>
+                              <div>분야: {data.sectors?.join(', ') || 'N/A'}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

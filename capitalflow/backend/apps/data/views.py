@@ -1032,10 +1032,17 @@ class CollectAllSourcesAPIView(APIView):
                         
                         # 수집된 조합 기록 (실제 수집된 데이터만)
                         if collected_count > 0:
-                            for country in all_countries:
-                                for sector in all_sectors:
-                                    combination_key = f"{country}-{sector}-{capital_type}-{year}"
-                                    collected_combinations.add(combination_key)
+                            # 실제 수집된 데이터의 조합만 기록
+                            from .models import RawCapitalData
+                            actual_collected = RawCapitalData.objects.filter(
+                                source__name=source,
+                                year=year,
+                                capital_type__code=capital_type
+                            ).values_list('country__code', 'sector__code', 'capital_type__code', 'year')
+                            
+                            for country, sector, cap_type, yr in actual_collected:
+                                combination_key = f"{country}-{sector}-{cap_type}-{yr}"
+                                collected_combinations.add(combination_key)
                         
                     except Exception as e:
                         logger.error(f"소스 {source} (자본타입: {capital_type}) 수집 실패: {e}")
@@ -1075,6 +1082,97 @@ class CollectAllSourcesAPIView(APIView):
                 'duplicate_rate': 0.0
             }
             
+            # 수집된 데이터 상세 정보 생성
+            collected_details = []
+            if total_collected > 0:
+                from .models import RawCapitalData
+                collected_data = RawCapitalData.objects.filter(year=year).select_related('source', 'country', 'sector', 'capital_type')
+                
+                # 소스별, 국가별, 분야별, 자본타입별 그룹화
+                source_summary = {}
+                country_summary = {}
+                sector_summary = {}
+                capital_type_summary = {}
+                
+                for record in collected_data:
+                    # 소스별 요약
+                    source_name = record.source.name
+                    if source_name not in source_summary:
+                        source_summary[source_name] = {
+                            'count': 0,
+                            'total_amount': 0,
+                            'countries': set(),
+                            'sectors': set(),
+                            'capital_types': set()
+                        }
+                    source_summary[source_name]['count'] += 1
+                    source_summary[source_name]['total_amount'] += float(record.amount_usd or 0)
+                    source_summary[source_name]['countries'].add(record.country.code)
+                    source_summary[source_name]['sectors'].add(record.sector.code)
+                    source_summary[source_name]['capital_types'].add(record.capital_type.code)
+                    
+                    # 국가별 요약
+                    country_code = record.country.code
+                    if country_code not in country_summary:
+                        country_summary[country_code] = {
+                            'count': 0,
+                            'total_amount': 0,
+                            'sources': set(),
+                            'sectors': set(),
+                            'capital_types': set()
+                        }
+                    country_summary[country_code]['count'] += 1
+                    country_summary[country_code]['total_amount'] += float(record.amount_usd or 0)
+                    country_summary[country_code]['sources'].add(record.source.name)
+                    country_summary[country_code]['sectors'].add(record.sector.code)
+                    country_summary[country_code]['capital_types'].add(record.capital_type.code)
+                    
+                    # 분야별 요약
+                    sector_code = record.sector.code
+                    if sector_code not in sector_summary:
+                        sector_summary[sector_code] = {
+                            'count': 0,
+                            'total_amount': 0,
+                            'sources': set(),
+                            'countries': set(),
+                            'capital_types': set()
+                        }
+                    sector_summary[sector_code]['count'] += 1
+                    sector_summary[sector_code]['total_amount'] += float(record.amount_usd or 0)
+                    sector_summary[sector_code]['sources'].add(record.source.name)
+                    sector_summary[sector_code]['countries'].add(record.country.code)
+                    sector_summary[sector_code]['capital_types'].add(record.capital_type.code)
+                    
+                    # 자본타입별 요약
+                    capital_type_code = record.capital_type.code
+                    if capital_type_code not in capital_type_summary:
+                        capital_type_summary[capital_type_code] = {
+                            'count': 0,
+                            'total_amount': 0,
+                            'sources': set(),
+                            'countries': set(),
+                            'sectors': set()
+                        }
+                    capital_type_summary[capital_type_code]['count'] += 1
+                    capital_type_summary[capital_type_code]['total_amount'] += float(record.amount_usd or 0)
+                    capital_type_summary[capital_type_code]['sources'].add(record.source.name)
+                    capital_type_summary[capital_type_code]['countries'].add(record.country.code)
+                    capital_type_summary[capital_type_code]['sectors'].add(record.sector.code)
+                
+                # set을 list로 변환
+                for summary in [source_summary, country_summary, sector_summary, capital_type_summary]:
+                    for key in summary:
+                        for field in ['countries', 'sectors', 'capital_types', 'sources']:
+                            if field in summary[key]:
+                                summary[key][field] = list(summary[key][field])
+                
+                collected_details = {
+                    'source_summary': source_summary,
+                    'country_summary': country_summary,
+                    'sector_summary': sector_summary,
+                    'capital_type_summary': capital_type_summary
+                }
+            
             print(f"📊 수집 완료 - 총 수집: {total_collected}, 실패: {total_failed}, 누락: {len(missing_combinations)}")
             
             return Response({
@@ -1088,7 +1186,8 @@ class CollectAllSourcesAPIView(APIView):
                     'source_results': source_results,
                     'missing_combinations': missing_combinations[:100],  # 최대 100개만 반환
                     'duplicate_data': duplicate_analysis['duplicates'][:50],  # 최대 50개만 반환
-                    'duplicate_analysis': duplicate_analysis
+                    'duplicate_analysis': duplicate_analysis,
+                    'collected_details': collected_details
                 }
             })
             
