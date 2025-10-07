@@ -969,17 +969,17 @@ class CollectAllSourcesAPIView(APIView):
             
             # 자본타입별 소스 매핑 (모든 무료/오픈 API 소스 활용)
             capital_type_sources = {
-                'FDI': ['World Bank', 'UNCTAD', 'IMF', 'Eurostat', 'BEA (US)', 'Crunchbase'],
-                'VC': ['OECD VC', 'SEC Form D', 'Crunchbase Basic', 'Crunchbase'],
-                'MA': ['SEC EDGAR', 'OpenCorporates', 'EU DG-COMP', 'Crunchbase'],
-                'IPO': ['SEC EDGAR', 'Finnhub', 'FinancialModelingPrep', 'Crunchbase'],
-                'PE': ['OECD PE', 'SEC Form D', 'Crunchbase'],
-                'BONDS': ['FRED', 'BIS', 'ECB SDW', 'IMF'],
-                'FPI': ['IMF CPIS', 'OECD', 'IMF'],
-                'SWF': ['IFSWF', 'GlobalSWF', 'Crunchbase'],
-                'GREENFIELD': ['World Bank PPI', 'UN Local', 'Crunchbase'],
-                'JV': ['OpenCorporates', 'Companies House', 'EDINET', 'Crunchbase'],
-                'DEVFIN': ['IATI Datastore', 'OECD-DAC', 'AidData', 'IMF']
+                'FDI': ['World Bank', 'UNCTAD', 'IMF', 'Eurostat', 'BEA (US)', 'Crunchbase', 'Yahoo Finance', 'Alpha Vantage'],
+                'VC': ['OECD VC', 'SEC Form D', 'Crunchbase Basic', 'Crunchbase', 'Yahoo Finance', 'Alpha Vantage', 'IEX Cloud', 'Web Scraping'],
+                'MA': ['SEC EDGAR', 'OpenCorporates', 'EU DG-COMP', 'Crunchbase', 'Yahoo Finance', 'Alpha Vantage', 'Web Scraping'],
+                'IPO': ['SEC EDGAR', 'Finnhub', 'FinancialModelingPrep', 'Crunchbase', 'Yahoo Finance', 'Alpha Vantage', 'IEX Cloud'],
+                'PE': ['OECD PE', 'SEC Form D', 'Crunchbase', 'Yahoo Finance', 'Alpha Vantage', 'Web Scraping'],
+                'BONDS': ['FRED', 'BIS', 'ECB SDW', 'IMF', 'Yahoo Finance', 'Alpha Vantage', 'IEX Cloud'],
+                'FPI': ['IMF CPIS', 'OECD', 'IMF', 'Yahoo Finance', 'Alpha Vantage', 'IEX Cloud'],
+                'SWF': ['IFSWF', 'GlobalSWF', 'Crunchbase', 'Yahoo Finance', 'Government Data'],
+                'GREENFIELD': ['World Bank PPI', 'UN Local', 'Crunchbase', 'Yahoo Finance', 'Government Data'],
+                'JV': ['OpenCorporates', 'Companies House', 'EDINET', 'Crunchbase', 'Yahoo Finance', 'Web Scraping'],
+                'DEVFIN': ['IATI Datastore', 'OECD-DAC', 'AidData', 'IMF', 'Government Data', 'Open Data']
             }
             
             # 모든 국가, 분야, 자본타입 가져오기

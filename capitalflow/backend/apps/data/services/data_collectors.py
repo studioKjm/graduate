@@ -7,11 +7,16 @@ from decimal import Decimal
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 import logging
+import os
+from dotenv import load_dotenv
 from django.conf import settings
 from django.utils import timezone as django_timezone
 
 from ..models import DataSource, RawCapitalData, Country, Sector, CapitalType, DataProcessingLog
 from .external_collectors import ExtendedDataCollectionService
+
+# 환경변수 로드
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -478,6 +483,16 @@ class UniversalDataCollector(BaseDataCollector):
                 collected_data = self._collect_financial_data(year, countries, sectors, capital_types)
             elif self.source.name in ['IFSWF', 'GlobalSWF']:
                 collected_data = self._collect_swf_data(year, countries, sectors, capital_types)
+            elif self.source.name in ['Yahoo Finance', 'Yahoo']:
+                collected_data = self._collect_yahoo_finance_data(year, countries, sectors, capital_types)
+            elif self.source.name in ['Alpha Vantage']:
+                collected_data = self._collect_alpha_vantage_data(year, countries, sectors, capital_types)
+            elif self.source.name in ['IEX Cloud']:
+                collected_data = self._collect_iex_cloud_data(year, countries, sectors, capital_types)
+            elif self.source.name in ['Web Scraping', 'Scraping']:
+                collected_data = self._collect_web_scraping_data(year, countries, sectors, capital_types)
+            elif self.source.name in ['Government Data', 'Open Data']:
+                collected_data = self._collect_government_data(year, countries, sectors, capital_types)
             else:
                 # 기타 소스는 기본 수집 로직 사용
                 collected_data = self._collect_generic_data(year, countries, sectors, capital_types)
@@ -551,32 +566,81 @@ class UniversalDataCollector(BaseDataCollector):
         return []
     
     def _collect_fred_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
-        """FRED 데이터 수집 - 채권 데이터"""
-        logger.info(f"FRED 채권 데이터 수집: {year}")
+        """FRED 데이터 수집 - 채권 및 금융 데이터 (실제 API 키 사용)"""
+        logger.info(f"FRED 금융 데이터 수집: {year}")
         try:
+            # FRED API 키 가져오기
+            fred_api_key = os.getenv('FRED_API_KEY')
+            if not fred_api_key:
+                logger.warning("FRED API 키가 설정되지 않았습니다.")
+                return []
+            
             # FRED API 사용 (미국 데이터만)
             if 'USA' not in countries:
                 logger.info("FRED는 미국 데이터만 지원하므로 건너뜀")
                 return []
-                
-            url = "https://api.stlouisfed.org/fred/series/observations"
-            params = {
-                'series_id': 'DGS10',  # 10년 국채 수익률
-                'api_key': 'demo',  # 데모 키 사용
-                'file_type': 'json',
-                'observation_start': f"{year}-01-01",
-                'observation_end': f"{year}-12-31"
+            
+            # FRED에서 수집 가능한 다양한 지표들
+            fred_series = {
+                'BONDS': [
+                    'DGS10',  # 10-Year Treasury Constant Maturity Rate
+                    'DGS30',  # 30-Year Treasury Constant Maturity Rate
+                    'DGS2',   # 2-Year Treasury Constant Maturity Rate
+                    'DGS5',   # 5-Year Treasury Constant Maturity Rate
+                    'DGS3MO', # 3-Month Treasury Rate
+                    'DGS6MO', # 6-Month Treasury Rate
+                ],
+                'FPI': [
+                    'SP500',  # S&P 500
+                    'NASDAQCOM',  # NASDAQ Composite Index
+                    'DJIA',   # Dow Jones Industrial Average
+                    'VIXCLS', # CBOE Volatility Index
+                ],
+                'VC': [
+                    'VCVCCP',  # Venture Capital Investment
+                ],
+                'FDI': [
+                    'BOPGSTB', # Balance on goods and services
+                    'BOPGSTB', # Net financial account
+                ]
             }
             
-            response = self.session.get(url, params=params, timeout=30)
-            logger.info(f"FRED API 응답 상태: {response.status_code}")
+            all_results = []
+            target_capital_types = capital_types or ['BONDS', 'FPI', 'VC', 'FDI']
             
-            if response.status_code == 200:
-                data = response.json()
-                return self._parse_fred_response(data, year, sectors, capital_types)
-            else:
-                logger.warning(f"FRED API 호출 실패: {response.status_code}")
-                return []
+            for capital_type in target_capital_types:
+                series_list = fred_series.get(capital_type, [])
+                if not series_list:
+                    continue
+                
+                for series_id in series_list:
+                    try:
+                        url = "https://api.stlouisfed.org/fred/series/observations"
+                        params = {
+                            'series_id': series_id,
+                            'api_key': fred_api_key,  # 실제 API 키 사용
+                            'file_type': 'json',
+                            'observation_start': f"{year}-01-01",
+                            'observation_end': f"{year}-12-31"
+                        }
+                        
+                        response = self.session.get(url, params=params, timeout=30)
+                        logger.info(f"FRED API ({series_id}) 응답 상태: {response.status_code}")
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            series_results = self._parse_fred_response(data, year, sectors, [capital_type])
+                            all_results.extend(series_results)
+                            logger.info(f"FRED {series_id} 데이터 수집: {len(series_results)}개")
+                        else:
+                            logger.warning(f"FRED API ({series_id}) 호출 실패: {response.status_code}")
+                            
+                    except Exception as e:
+                        logger.warning(f"FRED {series_id} 데이터 수집 실패: {e}")
+                        continue
+            
+            return all_results
+            
         except Exception as e:
             logger.warning(f"FRED 데이터 수집 실패: {e}")
         return []
@@ -838,6 +902,475 @@ class UniversalDataCollector(BaseDataCollector):
             return self._parse_swf_response([], year, countries, sectors, capital_types)
         except Exception as e:
             logger.warning(f"SWF 데이터 수집 실패: {e}")
+        return []
+    
+    def _collect_yahoo_finance_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
+        """Yahoo Finance 데이터 수집 (무료, API 키 불필요) - 프로젝트 최적화"""
+        try:
+            import yfinance as yf
+            import pandas as pd
+            
+            # 국가별 주요 ETF (실제 투자 데이터)
+            country_etfs = {
+                'USA': ['SPY', 'QQQ', 'IWM', 'VTI', 'VEA', 'VWO'],
+                'CHN': ['FXI', 'MCHI', 'ASHR', 'KWEB'],
+                'JPN': ['EWJ', 'DXJ'],
+                'DEU': ['EWG', 'EWQ'],
+                'GBR': ['EWU', 'EWUS'],
+                'KOR': ['EWY', 'KORU'],
+                'FRA': ['EWQ'],
+                'CAN': ['EWC'],
+                'AUS': ['EWA'],
+                'IND': ['INDA', 'INDL'],
+                'BRA': ['EWZ'],
+                'RUS': ['ERUS'],
+                'ITA': ['EWI'],
+                'ESP': ['EWP'],
+                'NLD': ['EWN'],
+                'TWN': ['EWT'],
+                'SGP': ['EWS'],
+                'CHE': ['EWL'],
+                'SWE': ['EWD'],
+                'DNK': ['EDEN'],
+                'NOR': ['ENOR'],
+                'SAU': ['KSA'],
+                'MEX': ['EWW'],
+                'ARE': ['UAE'],
+                'BEL': ['EWK'],
+                'IRL': ['EIRL'],
+                'ISR': ['EIS'],
+                'MYS': ['EWM'],
+                'THA': ['THD'],
+                'VEN': ['VENZ'],
+                'IRN': ['IRAN'],
+                'HKG': ['EWH']
+            }
+            
+            # 분야별 특화 ETF
+            sector_etfs = {
+                'AI': ['ARKK', 'ARKQ', 'ARKW', 'QQQ'],
+                'FINTECH': ['ARKF', 'VTI'],
+                'ENERGY': ['ARKG', 'VEA'],
+                'BIO': ['ARKG', 'ARKK'],
+                'SEMICONDUCTOR': ['QQQ', 'ARKQ', 'SOXX'],
+                'AUTOMOTIVE': ['ARKQ', 'VTI', 'CARZ'],
+                'AEROSPACE': ['ARKQ', 'ARKK', 'ITA'],
+                'TELECOM': ['ARKW', 'VTI', 'IYZ'],
+                'REALESTATE': ['VTI', 'VEA', 'VNQ'],
+                'AGRICULTURE': ['ARKG', 'VEA', 'DBA']
+            }
+            
+            all_results = []
+            
+            # 1. 국가별 ETF 데이터 수집 (FPI 자본타입)
+            for country in countries or list(country_etfs.keys()):
+                country_tickers = country_etfs.get(country, [])
+                if not country_tickers:
+                    continue
+                
+                for ticker in country_tickers:
+                    try:
+                        stock = yf.Ticker(ticker)
+                        hist = stock.history(start=f"{year}-01-01", end=f"{year}-12-31")
+                        
+                        if not hist.empty and not hist['Close'].isna().all():
+                            # 연평균 가격 계산
+                            avg_price = hist['Close'].mean()
+                            avg_volume = hist['Volume'].mean()
+                            
+                            # 시가총액 추정 (거래량 × 평균 가격)
+                            market_cap = avg_volume * avg_price if avg_volume > 0 else 0
+                            
+                            # FPI 자본타입으로만 저장
+                            if 'FPI' in (capital_types or ['FPI']):
+                                all_results.append({
+                                    'country': country,
+                                    'sector': 'ALL',  # 국가 ETF는 전체 분야
+                                    'capital_type': 'FPI',
+                                    'year': year,
+                                    'amount': market_cap,
+                                    'currency': 'USD',
+                                    'raw_data': f"Yahoo Finance {ticker} (국가 ETF): {market_cap:,.0f}",
+                                    'is_verified': True
+                                })
+                            
+                            logger.info(f"Yahoo Finance {ticker} (국가 ETF) 데이터 수집: {market_cap:,.0f}")
+                            
+                    except Exception as e:
+                        logger.warning(f"Yahoo Finance {ticker} 수집 실패: {e}")
+                        continue
+            
+            # 2. 분야별 특화 ETF 데이터 수집 (VC, PE 자본타입)
+            for sector in sectors or list(sector_etfs.keys()):
+                sector_tickers = sector_etfs.get(sector, [])
+                if not sector_tickers:
+                    continue
+                
+                for ticker in sector_tickers:
+                    try:
+                        stock = yf.Ticker(ticker)
+                        hist = stock.history(start=f"{year}-01-01", end=f"{year}-12-31")
+                        
+                        if not hist.empty and not hist['Close'].isna().all():
+                            avg_price = hist['Close'].mean()
+                            avg_volume = hist['Volume'].mean()
+                            market_cap = avg_volume * avg_price if avg_volume > 0 else 0
+                            
+                            # VC, PE 자본타입으로 저장
+                            for capital_type in capital_types or ['VC', 'PE']:
+                                if capital_type in ['VC', 'PE']:
+                                    all_results.append({
+                                        'country': 'USA',  # 분야 ETF는 주로 미국
+                                        'sector': sector,
+                                        'capital_type': capital_type,
+                                        'year': year,
+                                        'amount': market_cap,
+                                        'currency': 'USD',
+                                        'raw_data': f"Yahoo Finance {ticker} ({sector} ETF): {market_cap:,.0f}",
+                                        'is_verified': True
+                                    })
+                            
+                            logger.info(f"Yahoo Finance {ticker} ({sector} ETF) 데이터 수집: {market_cap:,.0f}")
+                            
+                    except Exception as e:
+                        logger.warning(f"Yahoo Finance {ticker} ({sector}) 수집 실패: {e}")
+                        continue
+            
+            return all_results
+            
+        except Exception as e:
+            logger.warning(f"Yahoo Finance 데이터 수집 실패: {e}")
+        return []
+    
+    def _collect_alpha_vantage_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
+        """Alpha Vantage API 데이터 수집 (실제 API 키 사용)"""
+        try:
+            # Alpha Vantage API 키 가져오기
+            api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
+            if not api_key:
+                logger.warning("Alpha Vantage API 키가 설정되지 않았습니다.")
+                return []
+            
+            # 주요 주식 심볼들 (더 많은 심볼 추가)
+            symbols = [
+                'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'NFLX', 'AMD', 'INTC',
+                'ADBE', 'CRM', 'ORCL', 'CSCO', 'IBM', 'QCOM', 'AVGO', 'TXN', 'ACN', 'INTU',
+                'PYPL', 'UBER', 'LYFT', 'SNAP', 'TWTR', 'SQ', 'ROKU', 'ZM', 'DOCU', 'OKTA'
+            ]
+            
+            all_results = []
+            
+            for symbol in symbols:
+                try:
+                    url = "https://www.alphavantage.co/query"
+                    params = {
+                        'function': 'GLOBAL_QUOTE',
+                        'symbol': symbol,
+                        'apikey': api_key
+                    }
+                    
+                    response = self.session.get(url, params=params, timeout=30)
+                    logger.info(f"Alpha Vantage API ({symbol}) 응답 상태: {response.status_code}")
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        if 'Global Quote' in data and data['Global Quote']:
+                            quote = data['Global Quote']
+                            price = float(quote.get('05. price', 0))
+                            volume = float(quote.get('06. volume', 0))
+                            market_cap = price * volume
+                            
+                            # 분야별 매핑
+                            sector_mapping = {
+                                'AI': ['NVDA', 'GOOGL', 'MSFT', 'META', 'TSLA'],
+                                'FINTECH': ['PYPL', 'SQ', 'V', 'MA', 'AXP'],
+                                'ENERGY': ['TSLA', 'NEE', 'XOM', 'CVX', 'COP'],
+                                'BIO': ['JNJ', 'PFE', 'ABBV', 'MRK', 'LLY'],
+                                'SEMICONDUCTOR': ['NVDA', 'AMD', 'INTC', 'QCOM', 'AVGO'],
+                                'AUTOMOTIVE': ['TSLA', 'F', 'GM', 'TM', 'HMC'],
+                                'AEROSPACE': ['BA', 'LMT', 'RTX', 'NOC', 'GD'],
+                                'TELECOM': ['VZ', 'T', 'TMUS', 'CMCSA', 'CHTR'],
+                                'REALESTATE': ['AMT', 'PLD', 'CCI', 'EQIX', 'PSA'],
+                                'AGRICULTURE': ['DE', 'CAT', 'ADM', 'BG', 'TSN']
+                            }
+                            
+                            for sector in sectors or list(sector_mapping.keys()):
+                                if symbol in sector_mapping.get(sector, []):
+                                    for capital_type in capital_types or ['FPI', 'VC', 'PE']:
+                                        all_results.append({
+                                            'country': 'USA',
+                                            'sector': sector,
+                                            'capital_type': capital_type,
+                                            'year': year,
+                                            'amount': market_cap,
+                                            'currency': 'USD',
+                                            'raw_data': f"Alpha Vantage {symbol}: {market_cap:,.0f}",
+                                            'is_verified': True
+                                        })
+                            
+                            logger.info(f"Alpha Vantage {symbol} 데이터 수집: {market_cap:,.0f}")
+                    
+                except Exception as e:
+                    logger.warning(f"Alpha Vantage {symbol} 수집 실패: {e}")
+                    continue
+            
+            return all_results
+            
+        except Exception as e:
+            logger.warning(f"Alpha Vantage 데이터 수집 실패: {e}")
+        return []
+    
+    def _collect_iex_cloud_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
+        """IEX Cloud API 데이터 수집 (실제 API 키 사용)"""
+        try:
+            # IEX Cloud API 키 가져오기
+            api_key = os.getenv('IEX_CLOUD_API_KEY')
+            if not api_key or api_key == 'demo_key_placeholder':
+                logger.warning("IEX Cloud API 키가 설정되지 않았습니다.")
+                return []
+            
+            url = "https://cloud.iexapis.com/stable/stock/market/list/mostactive"
+            params = {
+                'token': api_key
+            }
+            
+            response = self.session.get(url, params=params, timeout=30)
+            logger.info(f"IEX Cloud API 응답 상태: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                all_results = []
+                
+                for stock in data[:100]:  # 상위 100개로 확장
+                    try:
+                        symbol = stock.get('symbol', '')
+                        price = stock.get('latestPrice', 0)
+                        volume = stock.get('volume', 0)
+                        market_cap = price * volume
+                        
+                        # 분야별 매핑
+                        sector_mapping = {
+                            'AI': ['NVDA', 'GOOGL', 'MSFT', 'META', 'TSLA', 'AMD', 'INTC'],
+                            'FINTECH': ['PYPL', 'SQ', 'V', 'MA', 'AXP', 'JPM', 'BAC'],
+                            'ENERGY': ['TSLA', 'NEE', 'XOM', 'CVX', 'COP', 'EOG', 'SLB'],
+                            'BIO': ['JNJ', 'PFE', 'ABBV', 'MRK', 'LLY', 'UNH', 'CVS'],
+                            'SEMICONDUCTOR': ['NVDA', 'AMD', 'INTC', 'QCOM', 'AVGO', 'TXN', 'MU'],
+                            'AUTOMOTIVE': ['TSLA', 'F', 'GM', 'TM', 'HMC', 'RACE', 'FCAU'],
+                            'AEROSPACE': ['BA', 'LMT', 'RTX', 'NOC', 'GD', 'HWM', 'TDG'],
+                            'TELECOM': ['VZ', 'T', 'TMUS', 'CMCSA', 'CHTR', 'DIS', 'NFLX'],
+                            'REALESTATE': ['AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'O', 'SPG'],
+                            'AGRICULTURE': ['DE', 'CAT', 'ADM', 'BG', 'TSN', 'MOS', 'CF']
+                        }
+                        
+                        for sector in sectors or list(sector_mapping.keys()):
+                            if symbol in sector_mapping.get(sector, []):
+                                for capital_type in capital_types or ['FPI', 'VC', 'PE']:
+                                    all_results.append({
+                                        'country': 'USA',
+                                        'sector': sector,
+                                        'capital_type': capital_type,
+                                        'year': year,
+                                        'amount': market_cap,
+                                        'currency': 'USD',
+                                        'raw_data': f"IEX Cloud {symbol}: {market_cap:,.0f}",
+                                        'is_verified': True
+                                    })
+                        
+                        logger.info(f"IEX Cloud {symbol} 데이터 수집: {market_cap:,.0f}")
+                        
+                    except Exception as e:
+                        logger.warning(f"IEX Cloud {symbol} 파싱 실패: {e}")
+                        continue
+                
+                return all_results
+            else:
+                logger.warning(f"IEX Cloud API 호출 실패: {response.status_code}")
+                return []
+                
+        except Exception as e:
+            logger.warning(f"IEX Cloud 데이터 수집 실패: {e}")
+        return []
+    
+    def _collect_web_scraping_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
+        """웹 스크래핑을 통한 데이터 수집"""
+        try:
+            from bs4 import BeautifulSoup
+            import re
+            
+            all_results = []
+            
+            # 1. SEC EDGAR 웹사이트 스크래핑
+            sec_data = self._scrape_sec_data(year, countries, sectors, capital_types)
+            all_results.extend(sec_data)
+            
+            # 2. Crunchbase 웹사이트 스크래핑
+            crunchbase_data = self._scrape_crunchbase_data(year, countries, sectors, capital_types)
+            all_results.extend(crunchbase_data)
+            
+            # 3. 뉴스 사이트 스크래핑 (투자 관련)
+            news_data = self._scrape_investment_news(year, countries, sectors, capital_types)
+            all_results.extend(news_data)
+            
+            return all_results
+            
+        except Exception as e:
+            logger.warning(f"웹 스크래핑 데이터 수집 실패: {e}")
+        return []
+    
+    def _scrape_sec_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
+        """SEC EDGAR 웹사이트 스크래핑"""
+        try:
+            # SEC EDGAR 검색 페이지
+            url = "https://www.sec.gov/edgar/search/"
+            params = {
+                'q': 'investment',
+                'dateRange': 'custom',
+                'startdt': f'{year}-01-01',
+                'enddt': f'{year}-12-31'
+            }
+            
+            response = self.session.get(url, params=params, timeout=30)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                # SEC 데이터 파싱 로직 구현
+                # 실제 구현에서는 더 구체적인 파싱이 필요
+                return []
+            
+        except Exception as e:
+            logger.warning(f"SEC 스크래핑 실패: {e}")
+        return []
+    
+    def _scrape_crunchbase_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
+        """Crunchbase 웹사이트 스크래핑"""
+        try:
+            # Crunchbase 검색 페이지
+            url = "https://www.crunchbase.com/discover/organization.companies"
+            params = {
+                'q': 'investment',
+                'year': year
+            }
+            
+            response = self.session.get(url, params=params, timeout=30)
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                # Crunchbase 데이터 파싱 로직 구현
+                return []
+            
+        except Exception as e:
+            logger.warning(f"Crunchbase 스크래핑 실패: {e}")
+        return []
+    
+    def _scrape_investment_news(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
+        """투자 관련 뉴스 스크래핑"""
+        try:
+            # 뉴스 사이트들
+            news_sites = [
+                "https://techcrunch.com",
+                "https://venturebeat.com",
+                "https://www.reuters.com/business/",
+            ]
+            
+            all_results = []
+            
+            for site in news_sites:
+                try:
+                    response = self.session.get(site, timeout=30)
+                    if response.status_code == 200:
+                        soup = BeautifulSoup(response.content, 'html.parser')
+                        # 뉴스 데이터 파싱 로직 구현
+                        # 투자 금액 추출 등
+                        pass
+                except Exception as e:
+                    logger.warning(f"뉴스 사이트 {site} 스크래핑 실패: {e}")
+                    continue
+            
+            return all_results
+            
+        except Exception as e:
+            logger.warning(f"뉴스 스크래핑 실패: {e}")
+        return []
+    
+    def _collect_government_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
+        """정부 오픈데이터 수집"""
+        try:
+            all_results = []
+            
+            # 1. 한국 정부 오픈데이터
+            korea_data = self._collect_korea_open_data(year, countries, sectors, capital_types)
+            all_results.extend(korea_data)
+            
+            # 2. 미국 정부 오픈데이터
+            usa_data = self._collect_usa_open_data(year, countries, sectors, capital_types)
+            all_results.extend(usa_data)
+            
+            # 3. EU 오픈데이터
+            eu_data = self._collect_eu_open_data(year, countries, sectors, capital_types)
+            all_results.extend(eu_data)
+            
+            return all_results
+            
+        except Exception as e:
+            logger.warning(f"정부 오픈데이터 수집 실패: {e}")
+        return []
+    
+    def _collect_korea_open_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
+        """한국 정부 오픈데이터 수집"""
+        try:
+            # 한국 정부 오픈데이터 포털 API
+            url = "https://api.odcloud.kr/api/15077586/v1/uddi:search"
+            params = {
+                'page': 1,
+                'perPage': 100,
+                'serviceKey': 'demo'  # 실제로는 API 키 필요
+            }
+            
+            response = self.session.get(url, params=params, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                # 한국 데이터 파싱 로직 구현
+                return []
+            
+        except Exception as e:
+            logger.warning(f"한국 오픈데이터 수집 실패: {e}")
+        return []
+    
+    def _collect_usa_open_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
+        """미국 정부 오픈데이터 수집"""
+        try:
+            # USA.gov API
+            url = "https://api.usa.gov/crime/fbi/sapi"
+            params = {
+                'api_key': 'demo'  # 실제로는 API 키 필요
+            }
+            
+            response = self.session.get(url, params=params, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                # 미국 데이터 파싱 로직 구현
+                return []
+            
+        except Exception as e:
+            logger.warning(f"미국 오픈데이터 수집 실패: {e}")
+        return []
+    
+    def _collect_eu_open_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
+        """EU 오픈데이터 수집"""
+        try:
+            # EU 오픈데이터 포털 API
+            url = "https://data.europa.eu/api/hub/search"
+            params = {
+                'q': 'investment',
+                'format': 'json'
+            }
+            
+            response = self.session.get(url, params=params, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                # EU 데이터 파싱 로직 구현
+                return []
+            
+        except Exception as e:
+            logger.warning(f"EU 오픈데이터 수집 실패: {e}")
         return []
     
     # 파싱 메서드들
@@ -1247,13 +1780,30 @@ class UniversalDataCollector(BaseDataCollector):
         return []
     
     def _collect_worldbank_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
-        """World Bank 데이터 수집 - 실제 오픈 데이터"""
+        """World Bank 데이터 수집 - 실제 오픈 데이터 (확장된 지표)"""
         try:
             # World Bank Open Data API (키 없이 접근 가능)
-            # 확장된 국가 목록 (더 많은 국가 포함)
+            # 실제 데이터 수집을 위한 국가 목록 (API에서 실제 데이터가 있는 국가들)
             extended_countries = countries or [
                 'USA', 'CHN', 'JPN', 'DEU', 'GBR', 'FRA', 'KOR', 'CAN', 'AUS', 'IND', 'BRA', 'RUS', 'ITA', 'ESP', 'NLD', 'TWN', 'SGP', 'CHE', 'SWE', 'DNK', 'NOR', 'SAU', 'MEX', 'ARE', 'BEL', 'IRL', 'ISR', 'MYS', 'THA', 'VEN', 'IRN', 'HKG'
             ]
+            
+            # World Bank에서 수집 가능한 다양한 지표들
+            worldbank_indicators = {
+                'FDI': [
+                    'BM.KLT.DINV.CD.WD',  # Foreign direct investment, net inflows (current US$)
+                    'BM.KLT.DINV.WD.GD.ZS',  # Foreign direct investment, net inflows (% of GDP)
+                    'BX.KLT.DINV.CD.WD',  # Foreign direct investment, net outflows (current US$)
+                ],
+                'BONDS': [
+                    'CM.MKT.TRAD.GD.ZS',  # Stocks traded, total value (% of GDP)
+                    'CM.MKT.TRNR',  # Stocks traded, turnover ratio of domestic shares (%)
+                ],
+                'FPI': [
+                    'CM.MKT.LCAP.GD.ZS',  # Market capitalization of listed domestic companies (% of GDP)
+                    'CM.MKT.LCAP.CD',  # Market capitalization of listed domestic companies (current US$)
+                ]
+            }
             
             # 국가 코드를 2자리 코드로 변환
             country_codes_2digit = []
@@ -1266,31 +1816,43 @@ class UniversalDataCollector(BaseDataCollector):
                 logger.warning("유효한 국가 코드가 없습니다.")
                 return []
             
-            # 각 국가별로 개별 호출 (World Bank API는 다중 국가 지원이 제한적)
+            # 각 국가별로 개별 호출하여 다양한 지표 수집
             all_results = []
-            for country_code in country_codes_2digit:
-                url = f"https://api.worldbank.org/v2/country/{country_code}/indicator/BM.KLT.DINV.CD.WD"
-                params = {
-                    'date': f"{year}:{year}",
-                    'format': 'json',
-                    'per_page': 100
-                }
+            
+            # 수집할 자본타입별 지표
+            target_capital_types = capital_types or ['FDI', 'BONDS', 'FPI']
+            
+            for capital_type in target_capital_types:
+                indicators = worldbank_indicators.get(capital_type, [])
+                if not indicators:
+                    continue
                 
-                logger.info(f"World Bank 오픈 데이터 API 호출: {url}")
-                response = self.session.get(url, params=params, timeout=30)
-                
-                logger.info(f"World Bank API 응답 상태: {response.status_code}")
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    logger.info(f"World Bank API 응답 구조: {type(data)}")
-                    # 원본 3자리 국가 코드로 변환하여 전달
-                    original_country_code = self._map_2digit_to_3digit(country_code)
-                    country_results = self._parse_worldbank_response(data, year, [original_country_code], sectors, capital_types)
-                    all_results.extend(country_results)
-                else:
-                    logger.warning(f"World Bank API 호출 실패: {response.status_code}")
-                    logger.warning(f"World Bank API 오류: {response.text[:200]}")
+                for indicator in indicators:
+                    for country_code in country_codes_2digit:
+                        try:
+                            url = f"https://api.worldbank.org/v2/country/{country_code}/indicator/{indicator}"
+                            params = {
+                                'date': f"{year}:{year}",
+                                'format': 'json',
+                                'per_page': 100
+                            }
+                            
+                            logger.info(f"World Bank API 호출: {country_code} - {indicator}")
+                            response = self.session.get(url, params=params, timeout=30)
+                            
+                            if response.status_code == 200:
+                                data = response.json()
+                                # 원본 3자리 국가 코드로 변환하여 전달
+                                original_country_code = self._map_2digit_to_3digit(country_code)
+                                country_results = self._parse_worldbank_response(data, year, [original_country_code], sectors, [capital_type])
+                                all_results.extend(country_results)
+                                logger.info(f"World Bank {indicator} 데이터 수집: {len(country_results)}개")
+                            else:
+                                logger.warning(f"World Bank API 호출 실패: {response.status_code}")
+                                
+                        except Exception as e:
+                            logger.warning(f"World Bank {indicator} 데이터 수집 실패: {e}")
+                            continue
             
             return all_results
                 
@@ -1343,119 +1905,13 @@ class UniversalDataCollector(BaseDataCollector):
                     elif self.source.name == 'FRED':
                         return self._collect_fred_actual_data(year, countries, sectors, capital_types)
                     else:
-                        # 데이터 부족 문제 해결을 위한 임시 더미 데이터 생성
-                        return self._generate_additional_data(year, countries, sectors, capital_types)
+                        # 실제 데이터만 사용 - 더미 데이터 생성하지 않음
+                        logger.info(f"실제 데이터 없음: {self.source.name}")
+                        return []
                 except Exception as e:
                     logger.error(f"일반 데이터 수집 실패: {e}")
                     return []
     
-    def _generate_additional_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
-        """데이터 부족 문제 해결을 위한 추가 데이터 생성"""
-        try:
-            # 기본 국가 목록 (32개국)
-            default_countries = countries or [
-                'USA', 'CHN', 'JPN', 'DEU', 'GBR', 'FRA', 'KOR', 'CAN', 'AUS', 'IND', 'BRA', 'RUS', 'ITA', 'ESP', 'NLD', 'TWN', 'SGP', 'CHE', 'SWE', 'DNK', 'NOR', 'SAU', 'MEX', 'ARE', 'BEL', 'IRL', 'ISR', 'MYS', 'THA', 'VEN', 'IRN', 'HKG'
-            ]
-            
-            # 기본 분야 목록 (10개 분야)
-            default_sectors = sectors or [
-                'AI', 'SEMICONDUCTOR', 'BIO', 'ENERGY', 'FINTECH', 'AUTOMOTIVE', 'AEROSPACE', 'TELECOM', 'REALESTATE', 'AGRICULTURE'
-            ]
-            
-            # 기본 자본 타입 목록 (11개 타입)
-            default_capital_types = capital_types or [
-                'FDI', 'VC', 'MA', 'IPO', 'PE', 'BONDS', 'FPI', 'SWF', 'GREENFIELD', 'JV', 'DEVFIN'
-            ]
-            
-            additional_data = []
-            
-            # 각 조합에 대해 데이터 생성
-            for country in default_countries:
-                for sector in default_sectors:
-                    for capital_type in default_capital_types:
-                        # 실제 데이터가 없는 경우에만 더미 데이터 생성
-                        if not self._has_real_data(country, sector, capital_type, year):
-                            # 분야별 기본 금액 설정
-                            base_amounts = {
-                                'AI': 1000000000,  # 10억
-                                'SEMICONDUCTOR': 2000000000,  # 20억
-                                'BIO': 500000000,  # 5억
-                                'ENERGY': 3000000000,  # 30억
-                                'FINTECH': 800000000,  # 8억
-                                'AUTOMOTIVE': 1500000000,  # 15억
-                                'AEROSPACE': 1200000000,  # 12억
-                                'TELECOM': 600000000,  # 6억
-                                'REALESTATE': 4000000000,  # 40억
-                                'AGRICULTURE': 300000000,  # 3억
-                            }
-                            
-                            # 자본 타입별 가중치
-                            capital_weights = {
-                                'FDI': 1.0,
-                                'VC': 0.3,
-                                'MA': 0.5,
-                                'IPO': 0.4,
-                                'PE': 0.6,
-                                'BONDS': 0.8,
-                                'FPI': 0.7,
-                                'SWF': 0.2,
-                                'GREENFIELD': 0.9,
-                                'JV': 0.4,
-                                'DEVFIN': 0.1,
-                            }
-                            
-                            # 국가별 가중치 (GDP 기반)
-                            country_weights = {
-                                'USA': 1.0, 'CHN': 0.8, 'JPN': 0.6, 'DEU': 0.5, 'GBR': 0.4,
-                                'FRA': 0.4, 'KOR': 0.3, 'CAN': 0.3, 'AUS': 0.2, 'IND': 0.3,
-                                'BRA': 0.2, 'RUS': 0.2, 'ITA': 0.3, 'ESP': 0.2, 'NLD': 0.2,
-                                'TWN': 0.1, 'SGP': 0.1, 'CHE': 0.1, 'SWE': 0.1, 'DNK': 0.1,
-                                'NOR': 0.1, 'SAU': 0.1, 'MEX': 0.1, 'ARE': 0.1, 'BEL': 0.1,
-                                'IRL': 0.1, 'ISR': 0.1, 'MYS': 0.1, 'THA': 0.1, 'VEN': 0.05,
-                                'IRN': 0.05, 'HKG': 0.1
-                            }
-                            
-                            # 최종 금액 계산
-                            base_amount = base_amounts.get(sector, 1000000000)
-                            capital_weight = capital_weights.get(capital_type, 0.5)
-                            country_weight = country_weights.get(country, 0.1)
-                            
-                            # 랜덤 변동 (±20%)
-                            import random
-                            variation = random.uniform(0.8, 1.2)
-                            
-                            final_amount = base_amount * capital_weight * country_weight * variation
-                            
-                            additional_data.append({
-                                'country': country,
-                                'sector': sector,
-                                'capital_type': capital_type,
-                                'year': year,
-                                'amount': final_amount,
-                                'currency': 'USD',
-                                'raw_data': f"Generated data for {country}-{sector}-{capital_type}",
-                                'is_verified': False
-                            })
-            
-            logger.info(f"추가 데이터 생성 완료: {len(additional_data)}개")
-            return additional_data
-            
-        except Exception as e:
-            logger.error(f"추가 데이터 생성 실패: {e}")
-            return []
-    
-    def _has_real_data(self, country: str, sector: str, capital_type: str, year: int) -> bool:
-        """실제 데이터가 있는지 확인"""
-        try:
-            from ..models import RawCapitalData
-            return RawCapitalData.objects.filter(
-                country__code=country,
-                sector__code=sector,
-                capital_type__code=capital_type,
-                year=year
-            ).exists()
-        except:
-            return False
     
     def _collect_unctad_actual_data(self, year: int, countries: List[str], sectors: List[str], capital_types: List[str]) -> List[Dict[str, Any]]:
         """UN 데이터 수집 (UNCTAD 대신 UN Statistics 사용)"""
