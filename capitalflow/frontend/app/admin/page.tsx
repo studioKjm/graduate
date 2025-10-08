@@ -53,7 +53,7 @@ export default function AdminPage() {
   // 상세 통계 상태
   const [detailedStats, setDetailedStats] = useState<DetailedStats | null>(null)
   
-  const API_BASE_URL = 'http://localhost:8001/api/v1/capitalflows'
+  const API_BASE_URL = 'http://localhost:8002/api/v1/capitalflows'
 
   // 토스트 관리 함수들
   const addToast = (toast: Omit<ToastMessage, 'id'>) => {

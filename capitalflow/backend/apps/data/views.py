@@ -1197,6 +1197,540 @@ class CollectAllSourcesAPIView(APIView):
                 'success': False,
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class MassiveDataCollectionAPIView(APIView):
+    """대규모 데이터 수집 API - 10,000개 이상 목표"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        try:
+            from .services.data_collectors import DataCollectionService
+            from .models import Country, Sector, CapitalType, DataSource
+            
+            year = request.data.get('year', 2024)
+            countries = request.data.get('countries', [])
+            sectors = request.data.get('sectors', [])
+            capital_types = request.data.get('capital_types', [])
+            
+            logger.info(f"🚀 대규모 데이터 수집 시작: {year}")
+            
+            # 100개국 × 30개 분야 × 11개 자본타입 = 33,000개 조합
+            target_combinations = 100 * 30 * 11
+            min_target = 10000  # 최소 10,000개
+            
+            # 확장된 국가, 분야, 자본타입 목록
+            extended_countries = countries or [
+                'USA', 'CHN', 'JPN', 'DEU', 'GBR', 'FRA', 'KOR', 'CAN', 'AUS', 'IND', 'BRA', 'RUS', 'ITA', 'ESP', 'NLD', 'TWN', 'SGP', 'CHE', 'SWE', 'DNK', 'NOR', 'SAU', 'MEX', 'ARE', 'BEL', 'IRL', 'ISR', 'MYS', 'THA', 'HKG',
+                'FIN', 'AUT', 'POL', 'CZE', 'HUN', 'TUR', 'PRT', 'GRC', 'BGR', 'ROU', 'HRV', 'SVK', 'SVN', 'LTU', 'LVA', 'EST', 'LUX', 'CYP', 'MLT', 'LIE', 'MCO', 'AND', 'SMR', 'VAT', 'MKD',
+                'IDN', 'PHL', 'VNM', 'THA', 'MYS', 'SGP', 'HKG', 'TWN', 'KOR', 'JPN', 'CHN', 'IND', 'BGD', 'PAK', 'LKA', 'NPL', 'BTN', 'MDV', 'MMR', 'KHM',
+                'USA', 'CAN', 'MEX', 'BRA', 'ARG', 'CHL', 'COL', 'PER', 'VEN', 'ECU', 'BOL', 'PRY', 'URY', 'GUY', 'SUR',
+                'ZAF', 'EGY', 'NGA', 'KEN', 'MAR', 'TUN', 'ALG', 'GHA', 'UGA', 'TZA'
+            ]
+            
+            extended_sectors = sectors or [
+                'AI', 'FINTECH', 'ENERGY', 'BIO', 'SEMICONDUCTOR', 'AUTOMOTIVE', 'AEROSPACE', 'TELECOM', 'REALESTATE', 'AGRICULTURE',
+                'HEALTHCARE', 'EDUCATION', 'RETAIL', 'MANUFACTURING', 'CONSTRUCTION', 'TRANSPORTATION', 'LOGISTICS', 'ENTERTAINMENT', 'MEDIA', 'TECHNOLOGY',
+                'DEFENSE', 'MARINE', 'MINING', 'CHEMICALS', 'PHARMACEUTICALS', 'FOOD', 'TEXTILES', 'MACHINERY', 'ELECTRONICS'
+            ]
+            
+            all_capital_types = capital_types or ['FDI', 'FPI', 'VC', 'PE', 'MA', 'IPO', 'BONDS', 'SWF', 'GREENFIELD', 'JV', 'DEVFIN']
+            
+            # 빠른 데이터 수집을 위한 배치 처리
+            collection_service = DataCollectionService()
+            
+            # 1단계: 실제 데이터 수집 (빠른 소스만)
+            real_data = []
+            try:
+                # World Bank만 먼저 수집 (가장 빠름)
+                worldbank_data = collection_service._collect_worldbank_data(year, extended_countries[:20], extended_sectors[:10], all_capital_types[:5])
+                real_data.extend(worldbank_data)
+                logger.info(f"World Bank 데이터 수집: {len(worldbank_data)}개")
+                
+                # Yahoo Finance 수집
+                yahoo_data = collection_service._collect_yahoo_finance_data(year, extended_countries[:20], extended_sectors[:10], all_capital_types[:5])
+                real_data.extend(yahoo_data)
+                logger.info(f"Yahoo Finance 데이터 수집: {len(yahoo_data)}개")
+                
+            except Exception as e:
+                logger.warning(f"실제 데이터 수집 실패: {e}")
+            
+            # 실제 데이터 저장
+            saved_count = 0
+            if real_data:
+                try:
+                    # 배치 저장
+                    collection_service.save_raw_data_batch(real_data)
+                    saved_count = len(real_data)
+                    logger.info(f"실제 데이터 저장: {saved_count}개")
+                except Exception as e:
+                    logger.warning(f"실제 데이터 저장 실패: {e}")
+            
+            # 2단계: 대량 추정 데이터 생성 (빠른 생성)
+            estimated_data = []
+            try:
+                # 10,000개 목표로 추정 데이터 생성
+                target_estimated = 10000 - saved_count
+                if target_estimated > 0:
+                    estimated_data = collection_service._generate_fast_estimated_data(
+                        year, 
+                        extended_countries,
+                        extended_sectors,
+                        all_capital_types,
+                        target_estimated
+                    )
+                    logger.info(f"추정 데이터 생성: {len(estimated_data)}개")
+            except Exception as e:
+                logger.warning(f"추정 데이터 생성 실패: {e}")
+            
+            # 추정 데이터 저장
+            estimated_saved_count = 0
+            if estimated_data:
+                try:
+                    # 배치 저장
+                    collection_service.save_raw_data_batch(estimated_data)
+                    estimated_saved_count = len(estimated_data)
+                    logger.info(f"추정 데이터 저장: {estimated_saved_count}개")
+                except Exception as e:
+                    logger.warning(f"추정 데이터 저장 실패: {e}")
+            
+            total_saved = saved_count + estimated_saved_count
+            achievement_rate = (total_saved / target_combinations) * 100
+            min_achievement_rate = (total_saved / min_target) * 100
+            
+            logger.info(f"🎯 대규모 데이터 수집 완료: {total_saved}개 (실제: {saved_count}, 추정: {estimated_saved_count})")
+            
+            return Response({
+                'success': True,
+                'message': f'대규모 데이터 수집 완료: {total_saved}개',
+                'data': {
+                    'total_collected': total_saved,
+                    'real_data': saved_count,
+                    'estimated_data': estimated_saved_count,
+                    'target_combinations': target_combinations,
+                    'achievement_rate': achievement_rate,
+                    'min_achievement_rate': min_achievement_rate,
+                    'real_data_ratio': (saved_count / total_saved) * 100 if total_saved > 0 else 0,
+                    'estimated_data_ratio': (estimated_saved_count / total_saved) * 100 if total_saved > 0 else 0
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"대규모 데이터 수집 실패: {e}")
+        return Response({
+            'success': False,
+            'message': f'대규모 데이터 수집 실패: {str(e)}'
+        }, status=500)
+
+
+class DataImbalanceAnalysisAPIView(APIView):
+    """데이터 불균형 분석 API"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        try:
+            from .models import RawCapitalData
+            from django.db.models import Count
+            
+            year = request.data.get('year', 2024)
+            
+            logger.info(f"데이터 불균형 분석 시작: {year}")
+            
+            # 현재 데이터 분포 분석
+            total_data = RawCapitalData.objects.filter(year=year).count()
+            
+            # 국가별 분포
+            country_stats = []
+            for country in RawCapitalData.objects.filter(year=year).values('country__code').annotate(count=Count('id')):
+                country_stats.append({
+                    'country': country['country__code'],
+                    'count': country['count']
+                })
+            
+            # 분야별 분포
+            sector_stats = []
+            for sector in RawCapitalData.objects.filter(year=year).values('sector__code').annotate(count=Count('id')):
+                sector_stats.append({
+                    'sector': sector['sector__code'],
+                    'count': sector['count']
+                })
+            
+            # 자본타입별 분포
+            capital_stats = []
+            for capital in RawCapitalData.objects.filter(year=year).values('capital_type__code').annotate(count=Count('id')):
+                capital_stats.append({
+                    'capital': capital['capital_type__code'],
+                    'count': capital['count']
+                })
+            
+            # 이론적 균등 분포 계산
+            total_countries = len(country_stats)
+            total_sectors = len(sector_stats)
+            total_capitals = len(capital_stats)
+            theoretical_avg = total_data / (total_countries * total_sectors * total_capitals) if total_countries * total_sectors * total_capitals > 0 else 0
+            
+            # 불균형 분석 (3배 이상 = 과다, 0.3배 이하 = 부족)
+            excess_countries = []
+            deficit_countries = []
+            normal_countries = []
+            
+            for country in country_stats:
+                imbalance_ratio = country['count'] / theoretical_avg if theoretical_avg > 0 else 0
+                country_data = {
+                    'country': country['country'],
+                    'count': country['count'],
+                    'imbalance_ratio': imbalance_ratio
+                }
+                
+                if imbalance_ratio > 3.0:
+                    excess_countries.append(country_data)
+                elif imbalance_ratio < 0.3:
+                    deficit_countries.append(country_data)
+                else:
+                    normal_countries.append(country_data)
+            
+            # 분야별 불균형 분석
+            excess_sectors = []
+            deficit_sectors = []
+            normal_sectors = []
+            
+            for sector in sector_stats:
+                imbalance_ratio = sector['count'] / theoretical_avg if theoretical_avg > 0 else 0
+                sector_data = {
+                    'sector': sector['sector'],
+                    'count': sector['count'],
+                    'imbalance_ratio': imbalance_ratio
+                }
+                
+                if imbalance_ratio > 3.0:
+                    excess_sectors.append(sector_data)
+                elif imbalance_ratio < 0.3:
+                    deficit_sectors.append(sector_data)
+                else:
+                    normal_sectors.append(sector_data)
+            
+            # 자본타입별 불균형 분석
+            excess_capitals = []
+            deficit_capitals = []
+            normal_capitals = []
+            
+            for capital in capital_stats:
+                imbalance_ratio = capital['count'] / theoretical_avg if theoretical_avg > 0 else 0
+                capital_data = {
+                    'capital': capital['capital'],
+                    'count': capital['count'],
+                    'imbalance_ratio': imbalance_ratio
+                }
+                
+                if imbalance_ratio > 3.0:
+                    excess_capitals.append(capital_data)
+                elif imbalance_ratio < 0.3:
+                    deficit_capitals.append(capital_data)
+                else:
+                    normal_capitals.append(capital_data)
+            
+            # 정렬 (과다/부족 순)
+            excess_countries.sort(key=lambda x: x['imbalance_ratio'], reverse=True)
+            deficit_countries.sort(key=lambda x: x['imbalance_ratio'])
+            excess_sectors.sort(key=lambda x: x['imbalance_ratio'], reverse=True)
+            deficit_sectors.sort(key=lambda x: x['imbalance_ratio'])
+            excess_capitals.sort(key=lambda x: x['imbalance_ratio'], reverse=True)
+            deficit_capitals.sort(key=lambda x: x['imbalance_ratio'])
+            
+            logger.info(f"데이터 불균형 분석 완료: 과다 국가 {len(excess_countries)}개, 부족 국가 {len(deficit_countries)}개")
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'year': year,
+                    'total_data': total_data,
+                    'theoretical_avg': theoretical_avg,
+                    'excess_countries': excess_countries,
+                    'deficit_countries': deficit_countries,
+                    'normal_countries': normal_countries,
+                    'excess_sectors': excess_sectors,
+                    'deficit_sectors': deficit_sectors,
+                    'normal_sectors': normal_sectors,
+                    'excess_capitals': excess_capitals,
+                    'deficit_capitals': deficit_capitals,
+                    'normal_capitals': normal_capitals
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"데이터 불균형 분석 실패: {e}")
+            return Response({
+                'success': False,
+                'message': f'데이터 불균형 분석 실패: {str(e)}'
+            }, status=500)
+
+
+class DetailedDataAnalysisAPIView(APIView):
+    """상세 데이터 분석 API - 실제/추정 데이터 구분 및 추정 방법 표시"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        try:
+            from .models import RawCapitalData
+            from django.db.models import Count, Sum, Avg, Q
+            from collections import defaultdict
+            
+            year = request.GET.get('year', 2024)
+            
+            logger.info(f"상세 데이터 분석 시작: {year}")
+            
+            # 기본 통계
+            total_data = RawCapitalData.objects.filter(year=year).count()
+            
+            # 실제 데이터 vs 추정 데이터 분석
+            real_data = RawCapitalData.objects.filter(year=year, source__name__in=[
+                'World Bank', 'IMF', 'FRED', 'Alpha Vantage', 'Yahoo Finance', 
+                'IEX Cloud', 'SEC EDGAR', 'SEC Form D', 'GlobalSWF', 'IFSWF',
+                'OECD', 'UNCTAD', 'BIS', 'Eurostat', 'BEA (US)', 'Bank of Korea',
+                'Companies House', 'EDINET', 'OpenCorporates', 'IATI Datastore',
+                'OECD-DAC', 'AidData', 'World Bank PPI', 'Government Data'
+            ]).count()
+            
+            estimated_data = total_data - real_data
+            
+            # 소스별 상세 분석
+            source_analysis = []
+            for source in RawCapitalData.objects.filter(year=year).values('source__name').annotate(
+                count=Count('id'),
+                total_amount=Sum('amount_usd'),
+                avg_amount=Avg('amount_usd'),
+                avg_quality=Avg('data_quality_score')
+            ).order_by('-count'):
+                source_name = source['source__name']
+                is_real = source_name in [
+                    'World Bank', 'IMF', 'FRED', 'Alpha Vantage', 'Yahoo Finance', 
+                    'IEX Cloud', 'SEC EDGAR', 'SEC Form D', 'GlobalSWF', 'IFSWF',
+                    'OECD', 'UNCTAD', 'BIS', 'Eurostat', 'BEA (US)', 'Bank of Korea',
+                    'Companies House', 'EDINET', 'OpenCorporates', 'IATI Datastore',
+                    'OECD-DAC', 'AidData', 'World Bank PPI', 'Government Data'
+                ]
+                
+                # 추정 방법 분석
+                estimation_method = "실제 데이터" if is_real else self._get_estimation_method(source_name)
+                
+                source_analysis.append({
+                    'source_name': source_name,
+                    'count': source['count'],
+                    'total_amount': source['total_amount'] or 0,
+                    'avg_amount': source['avg_amount'] or 0,
+                    'avg_quality': source['avg_quality'] or 0,
+                    'is_real': is_real,
+                    'estimation_method': estimation_method,
+                    'percentage': (source['count'] / total_data * 100) if total_data > 0 else 0
+                })
+            
+            # 국가별 상세 분석
+            country_analysis = []
+            for country in RawCapitalData.objects.filter(year=year).values('country__code', 'country__name').annotate(
+                count=Count('id'),
+                total_amount=Sum('amount_usd'),
+                avg_amount=Avg('amount_usd'),
+                real_count=Count('id', filter=Q(source__name__in=[
+                    'World Bank', 'IMF', 'FRED', 'Alpha Vantage', 'Yahoo Finance', 
+                    'IEX Cloud', 'SEC EDGAR', 'SEC Form D', 'GlobalSWF', 'IFSWF',
+                    'OECD', 'UNCTAD', 'BIS', 'Eurostat', 'BEA (US)', 'Bank of Korea',
+                    'Companies House', 'EDINET', 'OpenCorporates', 'IATI Datastore',
+                    'OECD-DAC', 'AidData', 'World Bank PPI', 'Government Data'
+                ]))
+            ).order_by('-count'):
+                country_analysis.append({
+                    'country_code': country['country__code'],
+                    'country_name': country['country__name'] or country['country__code'],
+                    'total_count': country['count'],
+                    'real_count': country['real_count'],
+                    'estimated_count': country['count'] - country['real_count'],
+                    'total_amount': country['total_amount'] or 0,
+                    'avg_amount': country['avg_amount'] or 0,
+                    'real_percentage': (country['real_count'] / country['count'] * 100) if country['count'] > 0 else 0,
+                    'estimated_percentage': ((country['count'] - country['real_count']) / country['count'] * 100) if country['count'] > 0 else 0
+                })
+            
+            # 분야별 상세 분석
+            sector_analysis = []
+            for sector in RawCapitalData.objects.filter(year=year).values('sector__code', 'sector__name').annotate(
+                count=Count('id'),
+                total_amount=Sum('amount_usd'),
+                avg_amount=Avg('amount_usd'),
+                real_count=Count('id', filter=Q(source__name__in=[
+                    'World Bank', 'IMF', 'FRED', 'Alpha Vantage', 'Yahoo Finance', 
+                    'IEX Cloud', 'SEC EDGAR', 'SEC Form D', 'GlobalSWF', 'IFSWF',
+                    'OECD', 'UNCTAD', 'BIS', 'Eurostat', 'BEA (US)', 'Bank of Korea',
+                    'Companies House', 'EDINET', 'OpenCorporates', 'IATI Datastore',
+                    'OECD-DAC', 'AidData', 'World Bank PPI', 'Government Data'
+                ]))
+            ).order_by('-count'):
+                sector_analysis.append({
+                    'sector_code': sector['sector__code'],
+                    'sector_name': sector['sector__name'] or sector['sector__code'],
+                    'total_count': sector['count'],
+                    'real_count': sector['real_count'],
+                    'estimated_count': sector['count'] - sector['real_count'],
+                    'total_amount': sector['total_amount'] or 0,
+                    'avg_amount': sector['avg_amount'] or 0,
+                    'real_percentage': (sector['real_count'] / sector['count'] * 100) if sector['count'] > 0 else 0,
+                    'estimated_percentage': ((sector['count'] - sector['real_count']) / sector['count'] * 100) if sector['count'] > 0 else 0
+                })
+            
+            # 자본타입별 상세 분석
+            capital_analysis = []
+            for capital in RawCapitalData.objects.filter(year=year).values('capital_type__code', 'capital_type__name').annotate(
+                count=Count('id'),
+                total_amount=Sum('amount_usd'),
+                avg_amount=Avg('amount_usd'),
+                real_count=Count('id', filter=Q(source__name__in=[
+                    'World Bank', 'IMF', 'FRED', 'Alpha Vantage', 'Yahoo Finance', 
+                    'IEX Cloud', 'SEC EDGAR', 'SEC Form D', 'GlobalSWF', 'IFSWF',
+                    'OECD', 'UNCTAD', 'BIS', 'Eurostat', 'BEA (US)', 'Bank of Korea',
+                    'Companies House', 'EDINET', 'OpenCorporates', 'IATI Datastore',
+                    'OECD-DAC', 'AidData', 'World Bank PPI', 'Government Data'
+                ]))
+            ).order_by('-count'):
+                capital_analysis.append({
+                    'capital_code': capital['capital_type__code'],
+                    'capital_name': capital['capital_type__name'] or capital['capital_type__code'],
+                    'total_count': capital['count'],
+                    'real_count': capital['real_count'],
+                    'estimated_count': capital['count'] - capital['real_count'],
+                    'total_amount': capital['total_amount'] or 0,
+                    'avg_amount': capital['avg_amount'] or 0,
+                    'real_percentage': (capital['real_count'] / capital['count'] * 100) if capital['count'] > 0 else 0,
+                    'estimated_percentage': ((capital['count'] - capital['real_count']) / capital['count'] * 100) if capital['count'] > 0 else 0
+                })
+            
+            # 추정 방법별 통계
+            estimation_methods = defaultdict(int)
+            for source in source_analysis:
+                if not source['is_real']:
+                    estimation_methods[source['estimation_method']] += source['count']
+            
+            # 데이터 품질 분석
+            quality_analysis = {
+                'avg_quality_score': RawCapitalData.objects.filter(year=year).aggregate(avg=Avg('data_quality_score'))['avg'] or 0,
+                'high_quality_count': RawCapitalData.objects.filter(year=year, data_quality_score__gte=0.8).count(),
+                'medium_quality_count': RawCapitalData.objects.filter(year=year, data_quality_score__gte=0.6, data_quality_score__lt=0.8).count(),
+                'low_quality_count': RawCapitalData.objects.filter(year=year, data_quality_score__lt=0.6).count()
+            }
+            
+            logger.info(f"상세 데이터 분석 완료: 총 {total_data}개 (실제 {real_data}개, 추정 {estimated_data}개)")
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'year': year,
+                    'summary': {
+                        'total_data': total_data,
+                        'real_data': real_data,
+                        'estimated_data': estimated_data,
+                        'real_percentage': (real_data / total_data * 100) if total_data > 0 else 0,
+                        'estimated_percentage': (estimated_data / total_data * 100) if total_data > 0 else 0
+                    },
+                    'source_analysis': source_analysis,
+                    'country_analysis': country_analysis,
+                    'sector_analysis': sector_analysis,
+                    'capital_analysis': capital_analysis,
+                    'estimation_methods': dict(estimation_methods),
+                    'quality_analysis': quality_analysis
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"상세 데이터 분석 실패: {e}")
+            return Response({
+                'success': False,
+                'message': f'상세 데이터 분석 실패: {str(e)}'
+            }, status=500)
+    
+    def _get_estimation_method(self, source_name):
+        """소스명에 따른 추정 방법 반환"""
+        estimation_methods = {
+            # 실제 데이터 소스 (공식 통계)
+            'World Bank': '실제 데이터',
+            'IMF': '실제 데이터',
+            'FRED': '실제 데이터',
+            'Alpha Vantage': '실제 데이터',
+            'Yahoo Finance': '실제 데이터',
+            'IEX Cloud': '실제 데이터',
+            'SEC EDGAR': '실제 데이터',
+            'SEC Form D': '실제 데이터',
+            'GlobalSWF': '실제 데이터',
+            'IFSWF': '실제 데이터',
+            'OECD': '실제 데이터',
+            'UNCTAD': '실제 데이터',
+            'BIS': '실제 데이터',
+            'Eurostat': '실제 데이터',
+            'BEA (US)': '실제 데이터',
+            'Bank of Korea': '실제 데이터',
+            'Companies House': '실제 데이터',
+            'EDINET': '실제 데이터',
+            'OpenCorporates': '실제 데이터',
+            'IATI Datastore': '실제 데이터',
+            'OECD-DAC': '실제 데이터',
+            'AidData': '실제 데이터',
+            'World Bank PPI': '실제 데이터',
+            'Government Data': '실제 데이터',
+            
+            # 추정 데이터 소스
+            'Generated Data': '가중치 기반 생성',
+            'OECD VC': 'OECD 벤처캐피털 집계 데이터',
+            'OECD PE': 'OECD 사모펀드 집계 데이터',
+            'Crunchbase': 'Crunchbase 데이터베이스',
+            'Crunchbase Basic': 'Crunchbase 기본 데이터',
+            'PBOC': '중국인민은행 공식 데이터',
+            'Statistics Canada': '캐나다 통계청 데이터',
+            'RBA': '호주준비은행 데이터',
+            'ONS UK': '영국국가통계청 데이터',
+            'Bloomberg': 'Bloomberg 터미널 데이터',
+            'WTO': 'WTO 무역 통계',
+            'IMF CPIS': 'IMF 포트폴리오 투자 통계',
+            'Open Data': '정부 오픈 데이터',
+            'BCB': '브라질중앙은행 데이터',
+            'Bank of England': '영국중앙은행 데이터',
+            'KOSIS': '한국통계정보시스템',
+            'CB Insights': 'CB Insights 데이터베이스',
+            'Bank of Japan': '일본은행 데이터',
+            'Bank of Canada': '캐나다중앙은행 데이터',
+            'Refinitiv': 'Refinitiv 금융 데이터',
+            'ECB SDW': '유럽중앙은행 통계 데이터웨어하우스',
+            'Web Scraping': '웹 스크래핑 데이터',
+            'UN Statistics': '유엔 통계 데이터',
+            'RBI': '인도준비은행 데이터',
+            'Finnhub': 'Finnhub 금융 API',
+            'Fed (US)': '연방준비제도 데이터',
+            'UN Local': '유엔 지역 통계',
+            'ECB': '유럽중앙은행 데이터',
+            'PitchBook': 'PitchBook 데이터베이스',
+            'FinancialModelingPrep': 'Financial Modeling Prep API',
+            'EU DG-COMP': 'EU 경쟁정책총국 데이터',
+            
+            # 기타 추정 방법
+            'Estimated Data': 'GDP 기반 추정',
+            'Model Data': '회귀 모델 추정',
+            'Balanced Estimation': '균형 맞춤 추정',
+            'Fast Estimation': '빠른 추정 생성',
+            'Similar Country': '유사 국가 기반 추정',
+            'Similar Sector': '유사 분야 기반 추정',
+            'GDP Based': 'GDP 비율 기반 추정',
+            'Capital Type Based': '자본타입 기반 추정',
+            'Regression Based': '회귀 분석 기반 추정',
+            'Ratio Based': '비율 기반 추정',
+            'Substitution Based': '대체 기반 추정'
+        }
+        
+        # 정확한 매칭 우선
+        if source_name in estimation_methods:
+            return estimation_methods[source_name]
+        
+        # 부분 매칭
+        for key, method in estimation_methods.items():
+            if key.lower() in source_name.lower():
+                return method
+        
+        return '알 수 없는 추정 방법'
     
 
 

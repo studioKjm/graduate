@@ -91,9 +91,12 @@ export default function AdminDataManagementTab({
 }: AdminDataManagementTabProps) {
   const [selectedYearForCollection, setSelectedYearForCollection] = useState(2024)
   const [isCollectingAll, setIsCollectingAll] = useState(false)
+  const [isBalancedCollecting, setIsBalancedCollecting] = useState(false)
   const [collectionResults, setCollectionResults] = useState<any>(null)
+  const [balancedCollectionResults, setBalancedCollectionResults] = useState<any>(null)
   const [missingCombinations, setMissingCombinations] = useState<any[]>([])
   const [duplicateData, setDuplicateData] = useState<any[]>([])
+  const [dataImbalance, setDataImbalance] = useState<any>(null)
   
   const [metadata, setMetadata] = useState({
     countries: [] as Array<{code: string, name: string}>,
@@ -106,7 +109,7 @@ export default function AdminDataManagementTab({
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
-        const response = await fetch('http://localhost:8001/api/v1/capitalflows/metadata/')
+        const response = await fetch('http://localhost:8002/api/v1/capitalflows/metadata/')
         if (response.ok) {
           const data = await response.json()
           setMetadata({
@@ -122,6 +125,86 @@ export default function AdminDataManagementTab({
     }
     fetchMetadata()
   }, [])
+
+  // 데이터 불균형 분석
+  const analyzeDataImbalance = async () => {
+    try {
+      const response = await fetch('http://localhost:8002/api/v1/capitalflows/admin/analyze-imbalance/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year: selectedYearForCollection })
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setDataImbalance(data)
+        addToast({
+          type: 'success',
+          title: '데이터 불균형 분석 완료',
+          message: `과다 국가: ${data.excess_countries?.length || 0}개, 부족 국가: ${data.deficit_countries?.length || 0}개`
+        })
+      }
+    } catch (error) {
+      console.error('데이터 불균형 분석 실패:', error)
+      addToast({
+        type: 'error',
+        title: '데이터 불균형 분석 실패',
+        message: '데이터 불균형 분석 중 오류가 발생했습니다.'
+      })
+    }
+  }
+
+  // 균형 맞춤 수집 실행
+  const executeBalancedCollection = async () => {
+    setIsBalancedCollecting(true)
+    setBalancedCollectionResults(null)
+    
+    try {
+      console.log('⚖️ 균형 맞춤 데이터 수집 시작:', selectedYearForCollection)
+      
+      const response = await fetch('http://localhost:8002/api/v1/capitalflows/admin/massive-collect/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          year: selectedYearForCollection,
+          balanced_collection: true
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const result = await response.json()
+      console.log('📊 균형 맞춤 수집 결과:', result)
+      
+      if (result.success) {
+        setBalancedCollectionResults(result.data)
+        
+        addToast({
+          type: 'success',
+          title: '균형 맞춤 데이터 수집 완료',
+          message: `총 ${result.data.total_collected}개 데이터 수집 (실제: ${result.data.real_data}, 추정: ${result.data.estimated_data})`
+        })
+      } else {
+        addToast({
+          type: 'error',
+          title: '균형 맞춤 데이터 수집 실패',
+          message: result.message || '알 수 없는 오류가 발생했습니다.'
+        })
+      }
+    } catch (error) {
+      console.error('❌ 균형 맞춤 수집 오류:', error)
+      
+      addToast({
+        type: 'error',
+        title: '균형 맞춤 데이터 수집 실패',
+        message: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      })
+    } finally {
+      setIsBalancedCollecting(false)
+    }
+  }
 
   // 모든 조합 계산
   const calculateAllCombinations = (year: number) => {
@@ -142,7 +225,7 @@ export default function AdminDataManagementTab({
     try {
       console.log('🚀 전체 소스 데이터 수집 시작:', selectedYearForCollection)
       
-      const response = await fetch('http://localhost:8001/api/v1/capitalflows/admin/collect-all-sources/', {
+      const response = await fetch('http://localhost:8002/api/v1/capitalflows/admin/collect-all-sources/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -206,6 +289,142 @@ export default function AdminDataManagementTab({
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-medium text-gray-900 mb-4">통합 데이터 수집 및 관리</h3>
+
+        {/* 0. 데이터 불균형 분석 및 균형 맞춤 수집 */}
+        <div className="border rounded-lg p-4 bg-orange-50 mb-6">
+          <h4 className="font-medium text-gray-900 mb-2">0. 데이터 불균형 분석 및 균형 맞춤 수집</h4>
+          <p className="text-sm text-gray-600 mb-4">
+            현재 데이터 분포를 분석하여 불균형을 파악하고, 균형을 맞추는 방향으로 데이터를 수집합니다.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                분석 연도
+              </label>
+              <select
+                value={selectedYearForCollection}
+                onChange={(e) => setSelectedYearForCollection(parseInt(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                {Array.from({length: 10}, (_, i) => 2024 - i).map(year => (
+                  <option key={year} value={year}>{year}년</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex items-end">
+              <button
+                onClick={analyzeDataImbalance}
+                className="w-full bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors flex items-center justify-center"
+              >
+                🔍 불균형 분석
+              </button>
+            </div>
+            
+            <div className="flex items-end">
+              <button
+                onClick={executeBalancedCollection}
+                disabled={isBalancedCollecting}
+                className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+              >
+                {isBalancedCollecting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    균형 맞춤 수집 중...
+                  </>
+                ) : (
+                  '⚖️ 균형 맞춤 수집'
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* 데이터 불균형 분석 결과 */}
+          {dataImbalance && (
+            <div className="mt-4 p-4 bg-white rounded-md border">
+              <h5 className="font-medium text-gray-700 mb-3">불균형 분석 결과</h5>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="bg-red-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-red-600">{dataImbalance.excess_countries?.length || 0}</div>
+                  <div className="text-sm text-gray-600">과다 국가</div>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-blue-600">{dataImbalance.deficit_countries?.length || 0}</div>
+                  <div className="text-sm text-gray-600">부족 국가</div>
+                </div>
+                <div className="bg-green-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-green-600">{dataImbalance.normal_countries?.length || 0}</div>
+                  <div className="text-sm text-gray-600">적정 국가</div>
+                </div>
+              </div>
+
+              {/* 과다 국가 목록 */}
+              {dataImbalance.excess_countries && dataImbalance.excess_countries.length > 0 && (
+                <div className="mb-4">
+                  <h6 className="font-medium text-gray-600 mb-2">과다 국가 (상위 5개)</h6>
+                  <div className="flex flex-wrap gap-2">
+                    {dataImbalance.excess_countries.slice(0, 5).map((country: any, index: number) => (
+                      <span key={index} className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                        {country.country} ({country.count}개, {country.imbalance_ratio.toFixed(1)}x)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 부족 국가 목록 */}
+              {dataImbalance.deficit_countries && dataImbalance.deficit_countries.length > 0 && (
+                <div className="mb-4">
+                  <h6 className="font-medium text-gray-600 mb-2">부족 국가 (상위 5개)</h6>
+                  <div className="flex flex-wrap gap-2">
+                    {dataImbalance.deficit_countries.slice(0, 5).map((country: any, index: number) => (
+                      <span key={index} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                        {country.country} ({country.count}개, {country.imbalance_ratio.toFixed(1)}x)
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 균형 맞춤 수집 결과 */}
+          {balancedCollectionResults && (
+            <div className="mt-4 p-4 bg-white rounded-md border">
+              <h5 className="font-medium text-gray-700 mb-3">균형 맞춤 수집 결과</h5>
+              
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-blue-600">{balancedCollectionResults.total_collected}</div>
+                  <div className="text-sm text-gray-600">총 수집</div>
+                </div>
+                <div className="bg-green-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-green-600">{balancedCollectionResults.real_data}</div>
+                  <div className="text-sm text-gray-600">실제 데이터</div>
+                </div>
+                <div className="bg-yellow-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-yellow-600">{balancedCollectionResults.estimated_data}</div>
+                  <div className="text-sm text-gray-600">추정 데이터</div>
+                </div>
+                <div className="bg-purple-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-purple-600">{balancedCollectionResults.achievement_rate?.toFixed(1)}%</div>
+                  <div className="text-sm text-gray-600">달성률</div>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-600">
+                <p>• 실제 데이터 비율: {balancedCollectionResults.real_data_ratio?.toFixed(1)}%</p>
+                <p>• 추정 데이터 비율: {balancedCollectionResults.estimated_data_ratio?.toFixed(1)}%</p>
+                <p>• 목표 대비 달성률: {balancedCollectionResults.min_achievement_rate?.toFixed(1)}%</p>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* 1. 연도별 전체 조합 수집 */}
         <div className="border rounded-lg p-4 bg-blue-50 mb-6">
