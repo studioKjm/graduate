@@ -208,8 +208,8 @@ export default function AdminDataManagementTab({
 
   // 모든 조합 계산
   const calculateAllCombinations = (year: number) => {
-    const countries = metadata.countries.length || 32
-    const sectors = metadata.sectors.length || 11
+    const countries = metadata.countries.length || 100
+    const sectors = metadata.sectors.length || 30
     const capitalTypes = metadata.capitalTypes.length || 11
     
     return countries * sectors * capitalTypes

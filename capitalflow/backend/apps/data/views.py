@@ -1648,31 +1648,33 @@ class DetailedDataAnalysisAPIView(APIView):
     def _get_estimation_method(self, source_name):
         """소스명에 따른 추정 방법 반환"""
         estimation_methods = {
-            # 실제 데이터 소스 (공식 통계)
+            # 실제 데이터 소스 (공식 통계 기관)
             'World Bank': '실제 데이터',
             'IMF': '실제 데이터',
             'FRED': '실제 데이터',
-            'Alpha Vantage': '실제 데이터',
-            'Yahoo Finance': '실제 데이터',
-            'IEX Cloud': '실제 데이터',
             'SEC EDGAR': '실제 데이터',
             'SEC Form D': '실제 데이터',
-            'GlobalSWF': '실제 데이터',
-            'IFSWF': '실제 데이터',
             'OECD': '실제 데이터',
             'UNCTAD': '실제 데이터',
             'BIS': '실제 데이터',
             'Eurostat': '실제 데이터',
             'BEA (US)': '실제 데이터',
             'Bank of Korea': '실제 데이터',
-            'Companies House': '실제 데이터',
-            'EDINET': '실제 데이터',
-            'OpenCorporates': '실제 데이터',
             'IATI Datastore': '실제 데이터',
             'OECD-DAC': '실제 데이터',
             'AidData': '실제 데이터',
             'World Bank PPI': '실제 데이터',
             'Government Data': '실제 데이터',
+            
+            # 금융 데이터 (주식 시장 기반 - 추정)
+            'Alpha Vantage': '주식 시장 데이터 기반 추정',
+            'Yahoo Finance': '주식 시장 데이터 기반 추정',
+            'IEX Cloud': '주식 시장 데이터 기반 추정',
+            'GlobalSWF': 'SWF 투자 데이터베이스',
+            'IFSWF': 'SWF 투자 데이터베이스',
+            'Companies House': '기업 등록 데이터베이스',
+            'EDINET': '일본 금융청 데이터베이스',
+            'OpenCorporates': '기업 등록 데이터베이스',
             
             # 추정 데이터 소스
             'Generated Data': '가중치 기반 생성',
@@ -1731,7 +1733,146 @@ class DetailedDataAnalysisAPIView(APIView):
                 return method
         
         return '알 수 없는 추정 방법'
+
+
+class DuplicateAnalysisAPIView(APIView):
+    """중복 데이터 분석 API"""
+    permission_classes = [AllowAny]
     
+    def get(self, request):
+        try:
+            from .models import RawCapitalData
+            from django.db.models import Count, Q
+            from collections import defaultdict
+            
+            year = request.GET.get('year', 2024)
+            
+            logger.info(f"중복 데이터 분석 시작: {year}")
+            
+            # 중복 데이터 찾기 (동일한 country, sector, capital_type, year 조합)
+            duplicates = RawCapitalData.objects.filter(year=year).values(
+                'country__code', 'sector__code', 'capital_type__code'
+            ).annotate(
+                count=Count('id')
+            ).filter(count__gt=1)
+            
+            total_duplicates = sum(dup['count'] - 1 for dup in duplicates)  # 중복된 개수만
+            duplicate_groups = len(duplicates)
+            total_data = RawCapitalData.objects.filter(year=year).count()
+            duplicate_rate = (total_duplicates / total_data * 100) if total_data > 0 else 0
+            
+            # 국가별 중복 데이터
+            country_duplicates = defaultdict(int)
+            for dup in duplicates:
+                country_code = dup['country__code']
+                duplicate_count = dup['count'] - 1
+                country_duplicates[country_code] += duplicate_count
+            
+            # 분야별 중복 데이터
+            sector_duplicates = defaultdict(int)
+            for dup in duplicates:
+                sector_code = dup['sector__code']
+                duplicate_count = dup['count'] - 1
+                sector_duplicates[sector_code] += duplicate_count
+            
+            logger.info(f"중복 데이터 분석 완료: 총 {total_duplicates}개 중복, {duplicate_groups}개 그룹")
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'year': year,
+                    'total_duplicates': total_duplicates,
+                    'duplicate_groups': duplicate_groups,
+                    'duplicate_rate': round(duplicate_rate, 2),
+                    'country_duplicates': dict(country_duplicates),
+                    'sector_duplicates': dict(sector_duplicates)
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"중복 데이터 분석 실패: {e}")
+            return Response({
+                'success': False,
+                'message': f'중복 데이터 분석 실패: {str(e)}'
+            }, status=500)
+
+
+class MissingDataAnalysisAPIView(APIView):
+    """누락 데이터 분석 API"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        try:
+            from .models import RawCapitalData, Country, Sector, CapitalType
+            from django.db.models import Count
+            from collections import defaultdict
+            
+            year = request.GET.get('year', 2024)
+            
+            logger.info(f"누락 데이터 분석 시작: {year}")
+            
+            # 전체 가능한 조합 계산
+            total_countries = Country.objects.count()
+            total_sectors = Sector.objects.count()
+            total_capital_types = CapitalType.objects.count()
+            total_possible_combinations = total_countries * total_sectors * total_capital_types
+            
+            # 실제 존재하는 조합
+            existing_combinations = RawCapitalData.objects.filter(year=year).values(
+                'country__code', 'sector__code', 'capital_type__code'
+            ).distinct().count()
+            
+            total_missing = total_possible_combinations - existing_combinations
+            
+            # 국가별 누락 데이터
+            country_missing = defaultdict(int)
+            for country in Country.objects.all():
+                country_data = RawCapitalData.objects.filter(
+                    year=year, 
+                    country=country
+                ).values('sector__code', 'capital_type__code').distinct().count()
+                expected_combinations = total_sectors * total_capital_types
+                missing = expected_combinations - country_data
+                if missing > 0:
+                    country_missing[country.code] = missing
+            
+            # 분야별 누락 데이터
+            sector_missing = defaultdict(int)
+            for sector in Sector.objects.all():
+                sector_data = RawCapitalData.objects.filter(
+                    year=year, 
+                    sector=sector
+                ).values('country__code', 'capital_type__code').distinct().count()
+                expected_combinations = total_countries * total_capital_types
+                missing = expected_combinations - sector_data
+                if missing > 0:
+                    sector_missing[sector.code] = missing
+            
+            missing_countries = len(country_missing)
+            missing_sectors = len(sector_missing)
+            
+            logger.info(f"누락 데이터 분석 완료: 총 {total_missing}개 누락, {missing_countries}개 국가, {missing_sectors}개 분야")
+            
+            return Response({
+                'success': True,
+                'data': {
+                    'year': year,
+                    'total_possible_combinations': total_possible_combinations,
+                    'existing_combinations': existing_combinations,
+                    'total_missing': total_missing,
+                    'missing_countries': missing_countries,
+                    'missing_sectors': missing_sectors,
+                    'country_missing': dict(country_missing),
+                    'sector_missing': dict(sector_missing)
+                }
+            })
+            
+        except Exception as e:
+            logger.error(f"누락 데이터 분석 실패: {e}")
+            return Response({
+                'success': False,
+                'message': f'누락 데이터 분석 실패: {str(e)}'
+            }, status=500)
 
 
 class RawDataCollectionAPIView(APIView):
