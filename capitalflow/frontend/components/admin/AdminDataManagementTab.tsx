@@ -4,11 +4,8 @@ import { CollectionProgress, DataQuality } from '@/types/admin'
 import { useState, useEffect } from 'react'
 
 interface AdminDataManagementTabProps {
-  selectedDataSource: string
-  setSelectedDataSource: (source: string) => void
   selectedYear: number
   setSelectedYear: (year: number) => void
-  executeDataCollection: () => Promise<void>
   executeDataFusion: () => Promise<void>
   executeDataValidation: () => Promise<void>
   dataQuality: DataQuality | null
@@ -76,11 +73,8 @@ const CAPITAL_TYPE_SOURCES = {
 }
 
 export default function AdminDataManagementTab({
-  selectedDataSource,
-  setSelectedDataSource,
   selectedYear,
   setSelectedYear,
-  executeDataCollection,
   executeDataFusion,
   executeDataValidation,
   dataQuality,
@@ -91,12 +85,19 @@ export default function AdminDataManagementTab({
 }: AdminDataManagementTabProps) {
   const [selectedYearForCollection, setSelectedYearForCollection] = useState(2024)
   const [isCollectingAll, setIsCollectingAll] = useState(false)
-  const [isBalancedCollecting, setIsBalancedCollecting] = useState(false)
+  const [isSupplementingData, setIsSupplementingData] = useState(false)
+  const [isAdvancedCollecting, setIsAdvancedCollecting] = useState(false)
+  const [isEstimatingData, setIsEstimatingData] = useState(false)
+  const [isFourthStageEstimating, setIsFourthStageEstimating] = useState(false)
   const [collectionResults, setCollectionResults] = useState<any>(null)
-  const [balancedCollectionResults, setBalancedCollectionResults] = useState<any>(null)
-  const [missingCombinations, setMissingCombinations] = useState<any[]>([])
-  const [duplicateData, setDuplicateData] = useState<any[]>([])
-  const [dataImbalance, setDataImbalance] = useState<any>(null)
+  const [supplementResults, setSupplementResults] = useState<any>(null)
+  const [advancedResults, setAdvancedResults] = useState<any>(null)
+  const [estimationResults, setEstimationResults] = useState<any>(null)
+  const [fourthStageResults, setFourthStageResults] = useState<any>(null)
+  const [currentStep, setCurrentStep] = useState(1) // 1: 실제수집, 2: 보충수집, 3: 고급수집, 4: 추정수집, 5: 4단계추정
+  const [realDataCount, setRealDataCount] = useState(0)
+  const [estimatedDataCount, setEstimatedDataCount] = useState(0)
+  const [realDataResults, setRealDataResults] = useState<any>(null)
   
   const [metadata, setMetadata] = useState({
     countries: [] as Array<{code: string, name: string}>,
@@ -109,7 +110,7 @@ export default function AdminDataManagementTab({
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
-        const response = await fetch('http://localhost:8002/api/v1/capitalflows/metadata/')
+        const response = await fetch('http://localhost:8001/api/v1/capitalflows/metadata/')
         if (response.ok) {
           const data = await response.json()
           setMetadata({
@@ -126,10 +127,29 @@ export default function AdminDataManagementTab({
     fetchMetadata()
   }, [])
 
+  // 현재 데이터 카운트 로드
+  useEffect(() => {
+    const fetchCurrentDataCount = async () => {
+      try {
+        const response = await fetch(`http://localhost:8001/api/v1/capitalflows/admin/detailed-analysis/?year=${selectedYearForCollection}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            setRealDataCount(data.data.real_data_count || 0)
+            setEstimatedDataCount(data.data.estimated_data_count || 0)
+          }
+        }
+      } catch (error) {
+        console.error('데이터 카운트 로드 실패:', error)
+      }
+    }
+    fetchCurrentDataCount()
+  }, [selectedYearForCollection])
+
   // 데이터 불균형 분석
   const analyzeDataImbalance = async () => {
     try {
-      const response = await fetch('http://localhost:8002/api/v1/capitalflows/admin/analyze-imbalance/', {
+      const response = await fetch('http://localhost:8001/api/v1/capitalflows/admin/analyze-imbalance/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ year: selectedYearForCollection })
@@ -137,12 +157,14 @@ export default function AdminDataManagementTab({
       
       if (response.ok) {
         const data = await response.json()
-        setDataImbalance(data)
-        addToast({
-          type: 'success',
-          title: '데이터 불균형 분석 완료',
-          message: `과다 국가: ${data.excess_countries?.length || 0}개, 부족 국가: ${data.deficit_countries?.length || 0}개`
-        })
+        if (data.success) {
+          setDataImbalance(data.data)
+          addToast({
+            type: 'success',
+            title: '데이터 불균형 분석 완료',
+            message: `과다 국가: ${data.data.excess_countries?.length || 0}개, 부족 국가: ${data.data.deficit_countries?.length || 0}개`
+          })
+        }
       }
     } catch (error) {
       console.error('데이터 불균형 분석 실패:', error)
@@ -154,20 +176,22 @@ export default function AdminDataManagementTab({
     }
   }
 
-  // 균형 맞춤 수집 실행
-  const executeBalancedCollection = async () => {
-    setIsBalancedCollecting(true)
-    setBalancedCollectionResults(null)
+  // 1단계: 실제 데이터 수집
+  const executeRealDataCollection = async () => {
+    setIsCollectingAll(true)
+    setCollectionResults(null)
+    setCurrentStep(1)
     
     try {
-      console.log('⚖️ 균형 맞춤 데이터 수집 시작:', selectedYearForCollection)
+      console.log('🚀 1단계: 실제 데이터 수집 시작:', selectedYearForCollection)
       
-      const response = await fetch('http://localhost:8002/api/v1/capitalflows/admin/massive-collect/', {
+      const response = await fetch('http://localhost:8001/api/v1/capitalflows/admin/collect-all-sources/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           year: selectedYearForCollection,
-          balanced_collection: true
+          collect_all_sources: true,
+          calculate_combinations: true
         })
       })
       
@@ -176,41 +200,263 @@ export default function AdminDataManagementTab({
       }
       
       const result = await response.json()
-      console.log('📊 균형 맞춤 수집 결과:', result)
+      console.log('📊 1단계 수집 결과:', result)
       
       if (result.success) {
-        setBalancedCollectionResults(result.data)
+        setCollectionResults(result.data)
+        setRealDataResults(result.data)
+        setRealDataCount(result.data.real_data || 0)
+        setEstimatedDataCount(result.data.estimated_data || 0)
         
         addToast({
           type: 'success',
-          title: '균형 맞춤 데이터 수집 완료',
+          title: '1단계: 실제 데이터 수집 완료',
           message: `총 ${result.data.total_collected}개 데이터 수집 (실제: ${result.data.real_data}, 추정: ${result.data.estimated_data})`
         })
       } else {
         addToast({
           type: 'error',
-          title: '균형 맞춤 데이터 수집 실패',
+          title: '1단계: 실제 데이터 수집 실패',
           message: result.message || '알 수 없는 오류가 발생했습니다.'
         })
       }
     } catch (error) {
-      console.error('❌ 균형 맞춤 수집 오류:', error)
+      console.error('❌ 1단계 수집 오류:', error)
       
       addToast({
         type: 'error',
-        title: '균형 맞춤 데이터 수집 실패',
+        title: '1단계: 실제 데이터 수집 실패',
         message: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
       })
     } finally {
-      setIsBalancedCollecting(false)
+      setIsCollectingAll(false)
+    }
+  }
+
+  // 2단계: 실제 데이터 보충 수집
+  const executeSupplementDataCollection = async () => {
+    setIsSupplementingData(true)
+    setSupplementResults(null)
+    setCurrentStep(2)
+    
+    try {
+      console.log('🔄 2단계: 실제 데이터 보충 수집 시작:', selectedYearForCollection)
+      
+      const response = await fetch('http://localhost:8001/api/v1/capitalflows/admin/real-data-only-collect/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          year: selectedYearForCollection,
+          supplement_real_data: true,
+          target_real_data: 2000
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const result = await response.json()
+      console.log('📊 2단계 보충 수집 결과:', result)
+      
+      if (result.success) {
+        setSupplementResults(result.data)
+        setRealDataCount(result.data.real_data_count || 0)
+        setEstimatedDataCount(result.data.estimated_data_count || 0)
+        
+        addToast({
+          type: 'success',
+          title: '2단계: 실제 데이터 보충 완료',
+          message: `신규 ${result.data.new_real_data}개, 업데이트 ${result.data.updated_real_data}개 실제 데이터 수집 (총 실제: ${result.data.real_data_count}개)`
+        })
+      } else {
+        addToast({
+          type: 'error',
+          title: '2단계: 실제 데이터 보충 실패',
+          message: result.message || '알 수 없는 오류가 발생했습니다.'
+        })
+      }
+    } catch (error) {
+      console.error('❌ 2단계 보충 수집 오류:', error)
+      
+      addToast({
+        type: 'error',
+        title: '2단계: 실제 데이터 보충 실패',
+        message: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      })
+    } finally {
+      setIsSupplementingData(false)
+    }
+  }
+
+  // 3단계: 고급 3차 수집 (부족한 자본타입 중심)
+  const executeAdvancedThirdStageCollection = async () => {
+    setIsAdvancedCollecting(true)
+    setAdvancedResults(null)
+    setCurrentStep(3)
+    
+    try {
+      console.log('🚀 3단계: 고급 3차 수집 시작:', selectedYearForCollection)
+      
+      const response = await fetch('http://localhost:8001/api/v1/capitalflows/admin/advanced-third-stage-collect/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          year: selectedYearForCollection
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const result = await response.json()
+      console.log('📊 3단계 고급 수집 결과:', result)
+      
+      if (result.success) {
+        setAdvancedResults(result.data)
+        setRealDataCount(result.data.real_data_count || 0)
+        setEstimatedDataCount(result.data.estimated_data_count || 0)
+        
+        addToast({
+          type: 'success',
+          title: '3단계: 고급 3차 수집 완료',
+          message: `실제 ${result.data.new_real_data + result.data.updated_real_data}개, 추정 ${result.data.new_estimated_data}개 수집 (실제 비율: ${result.data.real_data_ratio?.toFixed(1)}%)`
+        })
+      } else {
+        addToast({
+          type: 'error',
+          title: '3단계: 고급 3차 수집 실패',
+          message: result.message || '알 수 없는 오류가 발생했습니다.'
+        })
+      }
+    } catch (error) {
+      console.error('❌ 3단계 고급 수집 오류:', error)
+      
+      addToast({
+        type: 'error',
+        title: '3단계: 고급 3차 수집 실패',
+        message: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      })
+    } finally {
+      setIsAdvancedCollecting(false)
+    }
+  }
+
+  const executeFourthStageEstimation = async () => {
+    setIsFourthStageEstimating(true)
+    setFourthStageResults(null)
+    setCurrentStep(5)
+    
+    try {
+      console.log('🚀 4단계: 누락 데이터 기반 추정 시작:', selectedYearForCollection)
+      
+      const response = await fetch('http://localhost:8001/api/v1/capitalflows/admin/fourth-stage-estimation/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          year: selectedYearForCollection,
+          max_estimated_data: 1000,
+          target_real_ratio: 0.4
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const result = await response.json()
+      console.log('📊 4단계 누락 데이터 기반 추정 결과:', result)
+      
+      if (result.success) {
+        setFourthStageResults(result.data)
+        
+        addToast({
+          type: 'success',
+          title: '4단계: 누락 데이터 기반 추정 완료',
+          message: `생성된 추정 데이터: ${result.data.generated_count}개, 최종 실제 데이터 비율: ${result.data.final_stats?.real_ratio?.toFixed(1)}%`
+        })
+      } else {
+        addToast({
+          type: 'error',
+          title: '4단계: 누락 데이터 기반 추정 실패',
+          message: result.message || '알 수 없는 오류가 발생했습니다.'
+        })
+      }
+    } catch (error) {
+      console.error('❌ 4단계 누락 데이터 기반 추정 오류:', error)
+      
+      addToast({
+        type: 'error',
+        title: '4단계: 누락 데이터 기반 추정 실패',
+        message: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      })
+    } finally {
+      setIsFourthStageEstimating(false)
+    }
+  }
+
+  // 5단계: 누락 조합 추정치 수집
+  const executeEstimationDataCollection = async () => {
+    setIsEstimatingData(true)
+    setEstimationResults(null)
+    setCurrentStep(5)
+    
+    try {
+      console.log('🔍 4단계: 누락 조합 추정치 수집 시작:', selectedYearForCollection)
+      
+      const response = await fetch('http://localhost:8001/api/v1/capitalflows/admin/massive-collect/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          year: selectedYearForCollection,
+          estimate_missing_data: true,
+          target_estimated_data: 4000
+        })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
+      const result = await response.json()
+      console.log('📊 3단계 추정 수집 결과:', result)
+      
+      if (result.success) {
+        setEstimationResults(result.data)
+        setEstimatedDataCount(result.data.total_estimated_data || 0)
+        
+        addToast({
+          type: 'success',
+          title: '3단계: 추정 데이터 수집 완료',
+          message: `추가 ${result.data.estimated_data}개 추정 데이터 생성 (총 추정: ${result.data.total_estimated_data}개)`
+        })
+      } else {
+        addToast({
+          type: 'error',
+          title: '3단계: 추정 데이터 수집 실패',
+          message: result.message || '알 수 없는 오류가 발생했습니다.'
+        })
+      }
+    } catch (error) {
+      console.error('❌ 3단계 추정 수집 오류:', error)
+      
+      addToast({
+        type: 'error',
+        title: '3단계: 추정 데이터 수집 실패',
+        message: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
+      })
+    } finally {
+      setIsEstimatingData(false)
     }
   }
 
   // 모든 조합 계산
   const calculateAllCombinations = (year: number) => {
-    const countries = metadata.countries.length || 100
-    const sectors = metadata.sectors.length || 30
-    const capitalTypes = metadata.capitalTypes.length || 11
+    // 하드코딩된 값 사용 (100개국 × 30개 분야 × 11개 자본타입 = 33,000개)
+    const countries = 100
+    const sectors = 30
+    const capitalTypes = 11
     
     return countries * sectors * capitalTypes
   }
@@ -219,13 +465,11 @@ export default function AdminDataManagementTab({
   const executeAllSourcesCollection = async () => {
     setIsCollectingAll(true)
     setCollectionResults(null)
-    setMissingCombinations([])
-    setDuplicateData([])
     
     try {
       console.log('🚀 전체 소스 데이터 수집 시작:', selectedYearForCollection)
       
-      const response = await fetch('http://localhost:8002/api/v1/capitalflows/admin/collect-all-sources/', {
+      const response = await fetch('http://localhost:8001/api/v1/capitalflows/admin/collect-all-sources/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -244,16 +488,6 @@ export default function AdminDataManagementTab({
       
       if (result.success) {
         setCollectionResults(result.data)
-        
-        // 누락된 조합 분석
-        if (result.data.missing_combinations) {
-          setMissingCombinations(result.data.missing_combinations)
-        }
-        
-        // 중복 데이터 분석
-        if (result.data.duplicate_data) {
-          setDuplicateData(result.data.duplicate_data)
-        }
         
         addToast({
           type: 'success',
@@ -290,22 +524,22 @@ export default function AdminDataManagementTab({
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-medium text-gray-900 mb-4">통합 데이터 수집 및 관리</h3>
 
-        {/* 0. 데이터 불균형 분석 및 균형 맞춤 수집 */}
-        <div className="border rounded-lg p-4 bg-orange-50 mb-6">
-          <h4 className="font-medium text-gray-900 mb-2">0. 데이터 불균형 분석 및 균형 맞춤 수집</h4>
+        {/* 1단계: 실제 데이터 수집 */}
+        <div className="border rounded-lg p-4 bg-green-50 mb-6">
+          <h4 className="font-medium text-gray-900 mb-2">1단계: 실제 데이터 수집 (우선순위 1)</h4>
           <p className="text-sm text-gray-600 mb-4">
-            현재 데이터 분포를 분석하여 불균형을 파악하고, 균형을 맞추는 방향으로 데이터를 수집합니다.
+            실제 데이터 소스에서 직접 수집 가능한 데이터를 우선적으로 수집합니다. 목표: 2,000개 실제 데이터
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                분석 연도
+                수집 연도
               </label>
               <select
                 value={selectedYearForCollection}
                 onChange={(e) => setSelectedYearForCollection(parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
               >
                 {Array.from({length: 10}, (_, i) => 2024 - i).map(year => (
                   <option key={year} value={year}>{year}년</option>
@@ -315,123 +549,70 @@ export default function AdminDataManagementTab({
             
             <div className="flex items-end">
               <button
-                onClick={analyzeDataImbalance}
-                className="w-full bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors flex items-center justify-center"
-              >
-                🔍 불균형 분석
-              </button>
-            </div>
-            
-            <div className="flex items-end">
-              <button
-                onClick={executeBalancedCollection}
-                disabled={isBalancedCollecting}
+                onClick={executeRealDataCollection}
+                disabled={isCollectingAll}
                 className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center"
               >
-                {isBalancedCollecting ? (
+                {isCollectingAll ? (
                   <>
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    균형 맞춤 수집 중...
+                    실제 데이터 수집 중...
                   </>
                 ) : (
-                  '⚖️ 균형 맞춤 수집'
+                  '🎯 1단계: 실제 데이터 수집'
                 )}
               </button>
             </div>
+            
+            <div className="flex items-end">
+              <div className="w-full text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+                <div className="font-medium">목표: 2,000개 실제 데이터</div>
+                <div className="text-lg font-bold text-green-600">현재: {realDataCount}개</div>
+                <div className="text-xs">실제 소스에서 직접 수집</div>
+              </div>
+            </div>
           </div>
 
-          {/* 데이터 불균형 분석 결과 */}
-          {dataImbalance && (
+          {/* 1단계 결과 */}
+          {realDataResults && (
             <div className="mt-4 p-4 bg-white rounded-md border">
-              <h5 className="font-medium text-gray-700 mb-3">불균형 분석 결과</h5>
+              <h5 className="font-medium text-gray-700 mb-3">1단계 수집 결과</h5>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="bg-red-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-red-600">{dataImbalance.excess_countries?.length || 0}</div>
-                  <div className="text-sm text-gray-600">과다 국가</div>
-                </div>
-                <div className="bg-blue-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-blue-600">{dataImbalance.deficit_countries?.length || 0}</div>
-                  <div className="text-sm text-gray-600">부족 국가</div>
-                </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div className="bg-green-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-green-600">{dataImbalance.normal_countries?.length || 0}</div>
-                  <div className="text-sm text-gray-600">적정 국가</div>
-                </div>
-              </div>
-
-              {/* 과다 국가 목록 */}
-              {dataImbalance.excess_countries && dataImbalance.excess_countries.length > 0 && (
-                <div className="mb-4">
-                  <h6 className="font-medium text-gray-600 mb-2">과다 국가 (상위 5개)</h6>
-                  <div className="flex flex-wrap gap-2">
-                    {dataImbalance.excess_countries.slice(0, 5).map((country: any, index: number) => (
-                      <span key={index} className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
-                        {country.country} ({country.count}개, {country.imbalance_ratio.toFixed(1)}x)
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 부족 국가 목록 */}
-              {dataImbalance.deficit_countries && dataImbalance.deficit_countries.length > 0 && (
-                <div className="mb-4">
-                  <h6 className="font-medium text-gray-600 mb-2">부족 국가 (상위 5개)</h6>
-                  <div className="flex flex-wrap gap-2">
-                    {dataImbalance.deficit_countries.slice(0, 5).map((country: any, index: number) => (
-                      <span key={index} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        {country.country} ({country.count}개, {country.imbalance_ratio.toFixed(1)}x)
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 균형 맞춤 수집 결과 */}
-          {balancedCollectionResults && (
-            <div className="mt-4 p-4 bg-white rounded-md border">
-              <h5 className="font-medium text-gray-700 mb-3">균형 맞춤 수집 결과</h5>
-              
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                <div className="bg-blue-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-blue-600">{balancedCollectionResults.total_collected}</div>
-                  <div className="text-sm text-gray-600">총 수집</div>
-                </div>
-                <div className="bg-green-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-green-600">{balancedCollectionResults.real_data}</div>
+                  <div className="text-2xl font-bold text-green-600">{realDataResults.total_collected?.toLocaleString() || 0}</div>
                   <div className="text-sm text-gray-600">실제 데이터</div>
                 </div>
-                <div className="bg-yellow-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-yellow-600">{balancedCollectionResults.estimated_data}</div>
-                  <div className="text-sm text-gray-600">추정 데이터</div>
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-blue-600">{realDataResults.collected_combinations?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">수집된 조합</div>
+                </div>
+                <div className="bg-orange-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-orange-600">{realDataResults.total_combinations?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">총 조합</div>
                 </div>
                 <div className="bg-purple-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-purple-600">{balancedCollectionResults.achievement_rate?.toFixed(1)}%</div>
+                  <div className="text-2xl font-bold text-purple-600">{((realDataResults.collected_combinations / realDataResults.total_combinations) * 100)?.toFixed(1) || 0}%</div>
                   <div className="text-sm text-gray-600">달성률</div>
                 </div>
               </div>
 
               <div className="text-sm text-gray-600">
-                <p>• 실제 데이터 비율: {balancedCollectionResults.real_data_ratio?.toFixed(1)}%</p>
-                <p>• 추정 데이터 비율: {balancedCollectionResults.estimated_data_ratio?.toFixed(1)}%</p>
-                <p>• 목표 대비 달성률: {balancedCollectionResults.min_achievement_rate?.toFixed(1)}%</p>
+                <div>실제 데이터 수집: {realDataResults.collected_combinations?.toLocaleString() || 0}개 / {realDataResults.total_combinations?.toLocaleString() || 0}개 조합</div>
+                <div>남은 조합: {(realDataResults.total_combinations - realDataResults.collected_combinations)?.toLocaleString() || 0}개</div>
               </div>
             </div>
           )}
         </div>
 
-        {/* 1. 연도별 전체 조합 수집 */}
+        {/* 2단계: 보충 데이터 수집 */}
         <div className="border rounded-lg p-4 bg-blue-50 mb-6">
-          <h4 className="font-medium text-gray-900 mb-2">1. 연도별 전체 조합 수집</h4>
+          <h4 className="font-medium text-gray-900 mb-2">2단계: 보충 데이터 수집 (우선순위 2)</h4>
           <p className="text-sm text-gray-600 mb-4">
-            선택한 연도의 모든 가능한 조합(국가×분야×자본타입)을 계산하고, 
-            모든 무료/오픈 소스에서 최대한 많은 데이터를 수집합니다.
+            추가 소스에서 실제 데이터를 더 수집하여 목표 2,000개를 달성합니다.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -450,381 +631,419 @@ export default function AdminDataManagementTab({
               </select>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                예상 총 조합 수
-              </label>
-              <div className="px-3 py-2 bg-gray-100 rounded-md text-sm font-mono">
-                {calculateAllCombinations(selectedYearForCollection).toLocaleString()}개
-              </div>
-            </div>
-            
             <div className="flex items-end">
               <button
-                onClick={executeAllSourcesCollection}
-                disabled={isCollectingAll}
+                onClick={executeSupplementDataCollection}
+                disabled={isSupplementingData}
                 className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center"
               >
-                {isCollectingAll ? (
+                {isSupplementingData ? (
                   <>
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    수집 중...
+                    보충 데이터 수집 중...
                   </>
                 ) : (
-                  '전체 소스 수집 시작'
+                  '📈 2단계: 보충 데이터 수집'
                 )}
               </button>
             </div>
+            
+            <div className="flex items-end">
+              <div className="w-full text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+                <div className="font-medium">목표: 2,000개 실제 데이터</div>
+                <div className="text-lg font-bold text-blue-600">현재: {realDataCount}개</div>
+                <div className="text-xs">추가 소스에서 수집</div>
+              </div>
+            </div>
           </div>
 
-          {/* 수집 결과 표시 */}
-          {collectionResults && (
+          {/* 2단계 결과 */}
+          {supplementResults && (
             <div className="mt-4 p-4 bg-white rounded-md border">
-              <h5 className="font-medium text-gray-700 mb-3">수집 결과</h5>
+              <h5 className="font-medium text-gray-700 mb-3">2단계 수집 결과</h5>
               
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                 <div className="bg-blue-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-blue-600">{collectionResults.total_combinations}</div>
-                  <div className="text-sm text-gray-600">총 조합 수</div>
+                  <div className="text-2xl font-bold text-blue-600">{supplementResults.total_collected?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">보충 데이터</div>
                 </div>
                 <div className="bg-green-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-green-600">{collectionResults.collected_combinations}</div>
+                  <div className="text-2xl font-bold text-green-600">{supplementResults.collected_combinations?.toLocaleString() || 0}</div>
                   <div className="text-sm text-gray-600">수집된 조합</div>
                 </div>
-                <div className="bg-red-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-red-600">{collectionResults.missing_combinations?.length || 0}</div>
-                  <div className="text-sm text-gray-600">누락된 조합</div>
-                </div>
-                <div className="bg-yellow-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-yellow-600">
-                    {collectionResults.duplicate_analysis?.total_duplicate_combinations || 0}
-                  </div>
-                  <div className="text-sm text-gray-600">중복 조합</div>
+                <div className="bg-orange-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-orange-600">{supplementResults.total_combinations?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">총 조합</div>
                 </div>
                 <div className="bg-purple-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-purple-600">
-                    {collectionResults.total_combinations > 0 ? 
-                      Math.round((collectionResults.collected_combinations / collectionResults.total_combinations) * 100) : 0}%
-                  </div>
-                  <div className="text-sm text-gray-600">수집률</div>
+                  <div className="text-2xl font-bold text-purple-600">{((supplementResults.collected_combinations / supplementResults.total_combinations) * 100)?.toFixed(1) || 0}%</div>
+                  <div className="text-sm text-gray-600">달성률</div>
                 </div>
               </div>
 
-              {/* 중복 데이터 분석 */}
-              {collectionResults.duplicate_analysis && (
-                <div className="mt-4 p-4 bg-yellow-50 rounded-md">
-                  <h6 className="font-medium text-gray-700 mb-2">중복 데이터 분석</h6>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <span className="font-medium">중복 조합 수:</span> {collectionResults.duplicate_analysis.total_duplicate_combinations}개
-                    </div>
-                    <div>
-                      <span className="font-medium">중복 레코드 수:</span> {collectionResults.duplicate_analysis.total_duplicate_records}개
-                    </div>
-                    <div>
-                      <span className="font-medium">중복률:</span> {collectionResults.duplicate_analysis.duplicate_rate.toFixed(1)}%
-                    </div>
-                  </div>
-                </div>
-              )}
+              <div className="text-sm text-gray-600">
+                <div>보충 데이터 수집: {supplementResults.collected_combinations?.toLocaleString() || 0}개 / {supplementResults.total_combinations?.toLocaleString() || 0}개 조합</div>
+                <div>남은 조합: {(supplementResults.total_combinations - supplementResults.collected_combinations)?.toLocaleString() || 0}개</div>
+              </div>
+            </div>
+          )}
+        </div>
 
-              {/* 소스별 수집 현황 */}
-              {collectionResults.source_results && (
-                <div className="mb-4">
-                  <h6 className="font-medium text-gray-700 mb-2">소스별 수집 현황</h6>
+        {/* 3단계: 고급 3차 수집 */}
+        <div className="border rounded-lg p-4 bg-purple-50 mb-6">
+          <h4 className="font-medium text-gray-900 mb-2">3단계: 고급 3차 수집 (우선순위 3)</h4>
+          <p className="text-sm text-gray-600 mb-4">
+            부족한 자본타입(VC, MA, IPO, PE, SWF 등) 중심으로 웹스크래핑, 뉴스, 정부데이터를 활용한 고품질 데이터 수집
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                수집 연도
+              </label>
+              <select
+                value={selectedYearForCollection}
+                onChange={(e) => setSelectedYearForCollection(parseInt(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              >
+                {Array.from({length: 10}, (_, i) => 2024 - i).map(year => (
+                  <option key={year} value={year}>{year}년</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex items-end">
+              <button
+                onClick={executeAdvancedThirdStageCollection}
+                disabled={isAdvancedCollecting}
+                className="w-full bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+              >
+                {isAdvancedCollecting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    고급 수집 중...
+                  </>
+                ) : (
+                  '🚀 3단계: 고급 3차 수집'
+                )}
+              </button>
+            </div>
+            
+            <div className="flex items-end">
+              <div className="w-full text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+                <div className="font-medium">목표: 60% 실제 데이터 비율</div>
+                <div className="text-lg font-bold text-purple-600">현재: {realDataCount}개</div>
+                <div className="text-xs">웹스크래핑 + 뉴스 + 정부데이터</div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3단계 결과 */}
+          {advancedResults && (
+            <div className="mt-4 p-4 bg-white rounded-md border">
+              <h5 className="font-medium text-gray-700 mb-3">3단계 고급 수집 결과</h5>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="bg-purple-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-purple-600">{advancedResults.new_real_data?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">신규 실제 데이터</div>
+                </div>
+                <div className="bg-green-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-green-600">{advancedResults.updated_real_data?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">업데이트 데이터</div>
+                </div>
+                <div className="bg-orange-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-orange-600">{advancedResults.new_estimated_data?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">추정 데이터</div>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-blue-600">{advancedResults.real_data_ratio?.toFixed(1) || 0}%</div>
+                  <div className="text-sm text-gray-600">실제 데이터 비율</div>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-600">
+                <div>웹스크래핑: {advancedResults.improvement_summary?.web_scraping_data || 0}개</div>
+                <div>뉴스 데이터: {advancedResults.improvement_summary?.news_data || 0}개</div>
+                <div>정부 데이터: {advancedResults.improvement_summary?.government_data || 0}개</div>
+                <div>금융기관: {advancedResults.improvement_summary?.financial_data || 0}개</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 4단계: 누락 데이터 기반 추정 */}
+        <div className="border rounded-lg p-4 bg-indigo-50 mb-6">
+          <h4 className="font-medium text-gray-900 mb-2">4단계: 누락 데이터 기반 추정 (우선순위 4)</h4>
+          <p className="text-sm text-gray-600 mb-4">
+            실제 데이터 기반으로 누락된 조합을 분석하고 지능형 추정 방법을 활용하여 고품질 추정 데이터 생성
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                추정 연도
+              </label>
+              <select
+                value={selectedYearForCollection}
+                onChange={(e) => setSelectedYearForCollection(parseInt(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                {Array.from({length: 10}, (_, i) => 2024 - i).map(year => (
+                  <option key={year} value={year}>{year}년</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex items-end">
+              <button
+                onClick={executeFourthStageEstimation}
+                disabled={isFourthStageEstimating}
+                className="w-full bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+              >
+                {isFourthStageEstimating ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    추정 생성 중...
+                  </>
+                ) : (
+                  '🔮 4단계: 누락 데이터 기반 추정'
+                )}
+              </button>
+            </div>
+            
+            <div className="flex items-end">
+              <div className="w-full text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+                <div className="font-medium">목표: 40% 실제 데이터 비율 유지</div>
+                <div className="text-lg font-bold text-indigo-600">최대: 1,000개</div>
+                <div className="text-xs">지능형 추정 방법</div>
+              </div>
+            </div>
+          </div>
+
+          {/* 4단계 결과 */}
+          {fourthStageResults && (
+            <div className="mt-4 p-4 bg-white rounded-md border">
+              <h5 className="font-medium text-gray-700 mb-3">4단계 누락 데이터 기반 추정 결과</h5>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="bg-indigo-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-indigo-600">{fourthStageResults.generated_count?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">생성된 추정 데이터</div>
+                </div>
+                <div className="bg-green-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-green-600">{fourthStageResults.final_stats?.real?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">총 실제 데이터</div>
+                </div>
+                <div className="bg-orange-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-orange-600">{fourthStageResults.final_stats?.estimated?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">총 추정 데이터</div>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-blue-600">{fourthStageResults.final_stats?.real_ratio?.toFixed(1) || 0}%</div>
+                  <div className="text-sm text-gray-600">실제 데이터 비율</div>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-600">
+                <div className="font-medium mb-2">추정 방법별 분포:</div>
+                <div>유사 국가 기반: {fourthStageResults.estimation_methods?.similar_country || 0}개</div>
+                <div>유사 분야 기반: {fourthStageResults.estimation_methods?.similar_sector || 0}개</div>
+                <div>자본타입 평균: {fourthStageResults.estimation_methods?.capital_type_average || 0}개</div>
+                <div>GDP 기반: {fourthStageResults.estimation_methods?.gdp_based || 0}개</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 5단계: 추정 데이터 생성 */}
+        <div className="border rounded-lg p-4 bg-orange-50 mb-6">
+          <h4 className="font-medium text-gray-900 mb-2">5단계: 추정 데이터 생성 (우선순위 5)</h4>
+          <p className="text-sm text-gray-600 mb-4">
+            실제 데이터가 없는 조합에 대해 추정 데이터를 생성합니다. 목표: 4,000개 추정 데이터
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                수집 연도
+              </label>
+              <select
+                value={selectedYearForCollection}
+                onChange={(e) => setSelectedYearForCollection(parseInt(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+              >
+                {Array.from({length: 10}, (_, i) => 2024 - i).map(year => (
+                  <option key={year} value={year}>{year}년</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex items-end">
+              <button
+                onClick={executeEstimationDataCollection}
+                disabled={isEstimatingData}
+                className="w-full bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+              >
+                {isEstimatingData ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    추정 데이터 생성 중...
+                  </>
+                ) : (
+                  '🔮 4단계: 추정 데이터 생성'
+                )}
+              </button>
+            </div>
+            
+            <div className="flex items-end">
+              <div className="w-full text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
+                <div className="font-medium">목표: 4,000개 추정 데이터</div>
+                <div className="text-lg font-bold text-orange-600">현재: {estimatedDataCount}개</div>
+                <div className="text-xs">알고리즘으로 추정</div>
+              </div>
+            </div>
+          </div>
+
+          {/* 4단계 결과 */}
+          {estimationResults && (
+            <div className="mt-4 p-4 bg-white rounded-md border">
+              <h5 className="font-medium text-gray-700 mb-3">4단계 생성 결과</h5>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div className="bg-orange-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-orange-600">{estimationResults.total_collected?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">추정 데이터</div>
+                </div>
+                <div className="bg-green-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-green-600">{estimationResults.collected_combinations?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">생성된 조합</div>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-blue-600">{estimationResults.total_combinations?.toLocaleString() || 0}</div>
+                  <div className="text-sm text-gray-600">총 조합</div>
+                </div>
+                <div className="bg-purple-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-purple-600">{((estimationResults.collected_combinations / estimationResults.total_combinations) * 100)?.toFixed(1) || 0}%</div>
+                  <div className="text-sm text-gray-600">달성률</div>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-600">
+                <div>추정 데이터 생성: {estimationResults.collected_combinations?.toLocaleString() || 0}개 / {estimationResults.total_combinations?.toLocaleString() || 0}개 조합</div>
+                <div>남은 조합: {(estimationResults.total_combinations - estimationResults.collected_combinations)?.toLocaleString() || 0}개</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+
+        {/* 4. 데이터 품질 관리 */}
+        <div className="border rounded-lg p-4 bg-green-50 mb-6">
+          <h4 className="font-medium text-gray-900 mb-2">4. 데이터 품질 관리</h4>
+          <p className="text-sm text-gray-600 mb-4">
+            수집된 데이터의 품질을 검증하고 이상치를 탐지합니다.
+          </p>
+
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={executeDataValidation}
+              disabled={loading}
+              className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+            >
+              {loading ? '검증 중...' : '데이터 검증'}
+            </button>
+            
+            <div className="text-sm text-gray-600">
+              데이터 품질 점수와 이상치를 분석합니다.
+            </div>
+          </div>
+
+          {/* 데이터 품질 결과 */}
+          {dataQuality && (
+            <div className="mt-4 p-4 bg-white rounded-md border">
+              <h5 className="font-medium text-gray-700 mb-3">데이터 품질 분석 결과</h5>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div className="bg-blue-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-blue-600">{dataQuality.avg_quality_score?.toFixed(3) || 0}</div>
+                  <div className="text-sm text-gray-600">평균 품질 점수</div>
+                </div>
+                <div className="bg-red-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-red-600">{dataQuality.outliers?.length || 0}</div>
+                  <div className="text-sm text-gray-600">이상치 개수</div>
+                </div>
+                <div className="bg-green-50 p-3 rounded-md">
+                  <div className="text-2xl font-bold text-green-600">{dataQuality.valid_data?.length || 0}</div>
+                  <div className="text-sm text-gray-600">유효 데이터</div>
+                </div>
+              </div>
+
+              {dataQuality.outliers && dataQuality.outliers.length > 0 && (
+                <div className="mt-4">
+                  <h6 className="font-medium text-gray-600 mb-2">이상치 상위 5개</h6>
                   <div className="space-y-2">
-                    {Object.entries(collectionResults.source_results).map(([source, data]: [string, any]) => (
-                      <div key={source} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                        <span className="text-sm font-medium">{source}</span>
-                        <div className="flex items-center space-x-4">
-                          <span className="text-sm text-gray-600">{data.collected}개 수집</span>
-                          <span className="text-sm text-gray-600">{data.reliability}% 신뢰도</span>
-                          <span className={`text-xs px-2 py-1 rounded ${
-                            data.status === 'success' ? 'bg-green-100 text-green-800' :
-                            data.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {data.status === 'success' ? '성공' :
-                             data.status === 'partial' ? '부분' : '실패'}
-                          </span>
-                        </div>
+                    {dataQuality.outliers.slice(0, 5).map((outlier: any, index: number) => (
+                      <div key={index} className="text-sm bg-red-50 p-2 rounded">
+                        <span className="font-medium">{outlier.country}-{outlier.sector}-{outlier.capital_type}</span>
+                        <span className="text-red-600 ml-2">품질점수: {outlier.quality_score?.toFixed(3)}</span>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* 수집된 데이터 상세 정보 */}
-              {collectionResults.collected_details && (
-                <div className="mb-4">
-                  <h6 className="font-medium text-gray-700 mb-2">수집된 데이터 상세 정보</h6>
-                  
-                  {/* 소스별 상세 정보 */}
-                  {collectionResults.collected_details.source_summary && (
-                    <div className="mb-4">
-                      <h7 className="font-medium text-gray-600 mb-2">소스별 상세</h7>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {Object.entries(collectionResults.collected_details.source_summary).map(([source, data]: [string, any]) => (
-                          <div key={source} className="bg-white p-3 rounded border">
-                            <div className="font-medium text-sm mb-2">{source}</div>
-                            <div className="text-xs space-y-1">
-                              <div>수집 건수: {data.count}개</div>
-                              <div>총 금액: ${(data.total_amount / 1000000000).toFixed(2)}B</div>
-                              <div>국가: {data.countries?.join(', ') || 'N/A'}</div>
-                              <div>분야: {data.sectors?.join(', ') || 'N/A'}</div>
-                              <div>자본타입: {data.capital_types?.join(', ') || 'N/A'}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 국가별 상세 정보 */}
-                  {collectionResults.collected_details.country_summary && (
-                    <div className="mb-4">
-                      <h7 className="font-medium text-gray-600 mb-2">국가별 상세</h7>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {Object.entries(collectionResults.collected_details.country_summary).slice(0, 10).map(([country, data]: [string, any]) => (
-                          <div key={country} className="bg-white p-3 rounded border">
-                            <div className="font-medium text-sm mb-2">{country}</div>
-                            <div className="text-xs space-y-1">
-                              <div>수집 건수: {data.count}개</div>
-                              <div>총 금액: ${(data.total_amount / 1000000000).toFixed(2)}B</div>
-                              <div>소스: {data.sources?.join(', ') || 'N/A'}</div>
-                              <div>분야: {data.sectors?.join(', ') || 'N/A'}</div>
-                              <div>자본타입: {data.capital_types?.join(', ') || 'N/A'}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 분야별 상세 정보 */}
-                  {collectionResults.collected_details.sector_summary && (
-                    <div className="mb-4">
-                      <h7 className="font-medium text-gray-600 mb-2">분야별 상세</h7>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {Object.entries(collectionResults.collected_details.sector_summary).map(([sector, data]: [string, any]) => (
-                          <div key={sector} className="bg-white p-3 rounded border">
-                            <div className="font-medium text-sm mb-2">{sector}</div>
-                            <div className="text-xs space-y-1">
-                              <div>수집 건수: {data.count}개</div>
-                              <div>총 금액: ${(data.total_amount / 1000000000).toFixed(2)}B</div>
-                              <div>소스: {data.sources?.join(', ') || 'N/A'}</div>
-                              <div>국가: {data.countries?.join(', ') || 'N/A'}</div>
-                              <div>자본타입: {data.capital_types?.join(', ') || 'N/A'}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 자본타입별 상세 정보 */}
-                  {collectionResults.collected_details.capital_type_summary && (
-                    <div className="mb-4">
-                      <h7 className="font-medium text-gray-600 mb-2">자본타입별 상세</h7>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {Object.entries(collectionResults.collected_details.capital_type_summary).map(([capitalType, data]: [string, any]) => (
-                          <div key={capitalType} className="bg-white p-3 rounded border">
-                            <div className="font-medium text-sm mb-2">{capitalType}</div>
-                            <div className="text-xs space-y-1">
-                              <div>수집 건수: {data.count}개</div>
-                              <div>총 금액: ${(data.total_amount / 1000000000).toFixed(2)}B</div>
-                              <div>소스: {data.sources?.join(', ') || 'N/A'}</div>
-                              <div>국가: {data.countries?.join(', ') || 'N/A'}</div>
-                              <div>분야: {data.sectors?.join(', ') || 'N/A'}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* 2. 자본타입별 소스 현황 */}
-        <div className="border rounded-lg p-4 bg-green-50 mb-6">
-          <h4 className="font-medium text-gray-900 mb-2">2. 자본타입별 무료/오픈 소스 현황</h4>
+        {/* 5. 자본타입별 소스 가이드 */}
+        <div className="border rounded-lg p-4 bg-purple-50">
+          <h4 className="font-medium text-gray-900 mb-2">5. 자본타입별 소스 가이드</h4>
           <p className="text-sm text-gray-600 mb-4">
-            각 자본타입별로 사용 가능한 무료/오픈 API 소스와 신뢰도를 표시합니다.
+            각 자본타입별로 사용 가능한 무료/오픈 소스와 API 키 요구사항을 확인할 수 있습니다.
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Object.entries(CAPITAL_TYPE_SOURCES).map(([capitalType, sources]) => (
               <div key={capitalType} className="bg-white p-4 rounded-md border">
-                <h5 className="font-medium text-gray-700 mb-2">{capitalType}</h5>
+                <h5 className="font-medium text-gray-900 mb-2">{capitalType}</h5>
                 <div className="space-y-2">
                   {sources.map((source, index) => (
-                    <div key={index} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center space-x-2">
+                    <div key={index} className="text-sm">
+                      <div className="flex items-center justify-between">
                         <span className="font-medium">{source.name}</span>
-                        {source.apiKey && (
-                          <span className="text-xs bg-yellow-100 text-yellow-800 px-1 py-0.5 rounded">
-                            API키 필요
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-gray-500">{source.type}</span>
-                        <span className={`text-xs px-1 py-0.5 rounded ${
-                          source.reliability >= 0.9 ? 'bg-green-100 text-green-800' :
-                          source.reliability >= 0.8 ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          source.type === 'OFFICIAL' ? 'bg-green-100 text-green-800' :
+                          source.type === 'OPEN' ? 'bg-blue-100 text-blue-800' :
+                          source.type === 'PRIVATE' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-gray-100 text-gray-800'
                         }`}>
-                          {Math.round(source.reliability * 100)}%
+                          {source.type}
                         </span>
+                      </div>
+                      <div className="text-gray-600 text-xs mt-1">
+                        신뢰도: {source.reliability} | API키: {source.apiKey ? '필요' : '불필요'}
+                      </div>
+                      <div className="text-gray-500 text-xs mt-1">
+                        {source.description}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             ))}
-          </div>
-        </div>
-
-        {/* 3. 누락된 조합 분석 */}
-        {missingCombinations.length > 0 && (
-          <div className="border rounded-lg p-4 bg-red-50 mb-6">
-            <h4 className="font-medium text-gray-900 mb-2">3. 누락된 조합 분석</h4>
-            <p className="text-sm text-gray-600 mb-4">
-              수집하지 못한 조합들을 표시합니다. 이 조합들은 더미 데이터를 생성하지 않고 비워둡니다.
-            </p>
-
-            <div className="max-h-60 overflow-y-auto bg-white border rounded-md p-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                {missingCombinations.slice(0, 100).map((combo: any, index: number) => (
-                  <div key={index} className="text-xs bg-red-100 p-2 rounded border-l-4 border-red-400">
-                    <div className="font-medium">{combo.country_code}-{combo.sector_code}-{combo.capital_type_code}</div>
-                    <div className="text-gray-500">연도: {combo.year}</div>
-                    <div className="text-gray-500">누락 이유: {combo.reason || '데이터 없음'}</div>
-                  </div>
-                ))}
-              </div>
-              {missingCombinations.length > 100 && (
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  ... 및 {missingCombinations.length - 100}개 더
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 4. 중복 데이터 처리 */}
-        {duplicateData.length > 0 && (
-          <div className="border rounded-lg p-4 bg-yellow-50 mb-6">
-            <h4 className="font-medium text-gray-900 mb-2">4. 중복 데이터 처리 (신뢰도 기반)</h4>
-            <p className="text-sm text-gray-600 mb-4">
-              동일한 조합에 대해 여러 소스에서 데이터를 수집한 경우, 신뢰도가 높은 데이터를 우선 선택합니다.
-            </p>
-
-            <div className="max-h-60 overflow-y-auto bg-white border rounded-md p-3">
-              <div className="space-y-2">
-                {duplicateData.slice(0, 50).map((duplicate: any, index: number) => (
-                  <div key={index} className="p-3 bg-gray-50 rounded border">
-                    <div className="font-medium text-sm">
-                      {duplicate.country_code}-{duplicate.sector_code}-{duplicate.capital_type_code} ({duplicate.year}년)
-                    </div>
-                    <div className="mt-2 space-y-1">
-                      {duplicate.sources.map((source: any, sourceIndex: number) => (
-                        <div key={sourceIndex} className={`flex items-center justify-between text-xs p-2 rounded ${
-                          source.selected ? 'bg-green-100 border border-green-300' : 'bg-gray-100'
-                        }`}>
-                          <span className="font-medium">{source.name}</span>
-                          <div className="flex items-center space-x-2">
-                            <span>신뢰도: {Math.round(source.reliability * 100)}%</span>
-                            <span>금액: ${source.amount?.toLocaleString() || 'N/A'}</span>
-                            {source.selected && (
-                              <span className="text-green-600 font-medium">✓ 선택됨</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {duplicateData.length > 50 && (
-                <p className="text-xs text-gray-500 mt-2 text-center">
-                  ... 및 {duplicateData.length - 50}개 더
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* 5. 데이터 융합 (기존 유지) */}
-        <div className="border rounded-lg p-4 bg-purple-50">
-          <h4 className="font-medium text-gray-900 mb-2">5. 데이터 융합 (추후 구현)</h4>
-          <p className="text-sm text-gray-600 mb-4">
-            원시데이터 수집이 완료된 후 구현할 예정입니다.
-          </p>
-          
-          <div className="bg-gray-100 p-4 rounded-md">
-            <p className="text-sm text-gray-500 text-center">
-              데이터 융합 기능은 원시데이터 수집 로직이 완성된 후 구현됩니다.
-            </p>
-          </div>
-        </div>
-
-        {/* 6. 실시간 수집 모니터링 */}
-        <div className="border rounded-lg p-4 bg-gray-50">
-          <h4 className="font-medium text-gray-900 mb-2">실시간 수집 모니터링</h4>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">현재 상태:</span>
-              <div className="flex items-center space-x-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  collectionProgress.status === 'idle' ? 'bg-gray-400' :
-                  collectionProgress.status === 'collecting' ? 'bg-yellow-400 animate-pulse' :
-                  collectionProgress.status === 'processing' ? 'bg-blue-400 animate-pulse' :
-                  collectionProgress.status === 'completed' ? 'bg-green-400' :
-                  'bg-red-400'
-                }`}></div>
-                <span className="text-sm font-medium">
-                  {collectionProgress.status === 'idle' ? '대기 중' :
-                  collectionProgress.status === 'collecting' ? '수집 중' :
-                  collectionProgress.status === 'processing' ? '처리 중' :
-                  collectionProgress.status === 'completed' ? '완료' :
-                  '오류'}
-                </span>
-              </div>
-            </div>
-
-            {collectionProgress.status !== 'idle' && (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">진행률:</span>
-                  <span className="text-sm font-medium">{collectionProgress.current}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className={`h-2 rounded-full transition-all duration-300 ${
-                      collectionProgress.status === 'completed' ? 'bg-green-500' :
-                      collectionProgress.status === 'error' ? 'bg-red-500' :
-                      'bg-blue-500'
-                    }`}
-                    style={{ width: `${collectionProgress.current}%` }}
-                  ></div>
-                </div>
-                {collectionProgress.startTime && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">경과 시간:</span>
-                    <span className="text-sm font-medium">
-                      {Math.floor((Date.now() - collectionProgress.startTime) / 1000)}초
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
           </div>
         </div>
       </div>

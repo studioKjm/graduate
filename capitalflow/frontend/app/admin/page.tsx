@@ -30,8 +30,7 @@ export default function AdminPage() {
   const [lastUpdated, setLastUpdated] = useState<string>('')
   
   // 데이터 수집 관련 상태
-  const [selectedDataSource, setSelectedDataSource] = useState<string>('all')
-  const [selectedYear, setSelectedYear] = useState<number>(2023)
+  const [selectedYear, setSelectedYear] = useState<number>(2024)
   const [isCollecting, setIsCollecting] = useState(false)
   
   // 실시간 모니터링 상태
@@ -53,7 +52,7 @@ export default function AdminPage() {
   // 상세 통계 상태
   const [detailedStats, setDetailedStats] = useState<DetailedStats | null>(null)
   
-  const API_BASE_URL = 'http://localhost:8002/api/v1/capitalflows'
+  const API_BASE_URL = 'http://localhost:8001/api/v1/capitalflows'
 
   // 토스트 관리 함수들
   const addToast = (toast: Omit<ToastMessage, 'id'>) => {
@@ -195,72 +194,6 @@ export default function AdminPage() {
     }
   }
 
-  // 데이터 수집 실행
-  const executeDataCollection = async () => {
-    setIsCollecting(true)
-    setLoading(true)
-    
-    setCollectionProgress({
-      current: 0,
-      total: 100,
-      source: selectedDataSource,
-      status: 'collecting',
-      startTime: Date.now(),
-      estimatedTime: null
-    })
-    
-    try {
-      const body = { 
-        year: selectedYear,
-        ...(selectedDataSource !== 'all' && { source: selectedDataSource })
-      }
-      
-      addToast({
-        type: 'info',
-        title: '데이터 수집 시작',
-        message: `${selectedDataSource} 소스에서 ${selectedYear}년 데이터 수집을 시작합니다...`
-      })
-
-      const response = await fetch(`${API_BASE_URL}/admin/collect/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
-
-      const result = await response.json()
-      
-      if (result.success) {
-        setCollectionProgress(prev => ({ ...prev, current: 100, status: 'completed' }))
-        addToast({
-          type: 'success',
-          title: '데이터 수집 완료',
-          message: `수집: ${result.results?.collected || 0}개, 처리: ${result.results?.processed || 0}개`
-        })
-      } else {
-        setCollectionProgress(prev => ({ ...prev, status: 'error' }))
-        addToast({
-          type: 'error',
-          title: '데이터 수집 실패',
-          message: result.error || '알 수 없는 오류가 발생했습니다.'
-        })
-      }
-      
-      fetchProcessingLogs()
-      fetchSystemStats()
-      fetchDataQuality()
-      fetchCollectionStats()
-    } catch (error) {
-      setCollectionProgress(prev => ({ ...prev, status: 'error' }))
-      addToast({
-        type: 'error',
-        title: '데이터 수집 실패',
-        message: error instanceof Error ? error.message : String(error)
-      })
-    } finally {
-      setIsCollecting(false)
-      setLoading(false)
-    }
-  }
 
   // 데이터 융합 실행
   const executeDataFusion = async (fusionSettings?: any) => {
@@ -450,13 +383,10 @@ export default function AdminPage() {
             collectionStats={collectionStats}
             detailedStats={detailedStats}
             lastUpdated={lastUpdated}
-            selectedDataSource={selectedDataSource}
-            setSelectedDataSource={setSelectedDataSource}
             selectedYear={selectedYear}
             setSelectedYear={setSelectedYear}
             isCollecting={isCollecting}
             loading={loading}
-            executeDataCollection={executeDataCollection}
             executeDataFusion={executeDataFusion}
             fetchDataQuality={fetchDataQuality}
             fetchCollectionStats={fetchCollectionStats}
@@ -469,11 +399,8 @@ export default function AdminPage() {
         
         {activeTab === 'data-management' && (
           <AdminDataManagementTab
-            selectedDataSource={selectedDataSource}
-            setSelectedDataSource={setSelectedDataSource}
             selectedYear={selectedYear}
             setSelectedYear={setSelectedYear}
-            executeDataCollection={executeDataCollection}
             executeDataFusion={executeDataFusion}
             executeDataValidation={executeDataValidation}
             dataQuality={dataQuality}
@@ -574,7 +501,7 @@ export default function AdminPage() {
                 <DataSourceCard
                   key={source.id}
                   source={source}
-                  onCollect={executeDataCollection}
+                  onCollect={() => {}}
                   loading={loading}
                 />
               ))}

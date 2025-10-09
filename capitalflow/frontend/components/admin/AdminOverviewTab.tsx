@@ -1,6 +1,6 @@
 'use client'
 
-import { CollectionProgress, DataQuality, CollectionStats, DetailedStats, SystemStats, ToastMessage } from '@/types/admin'
+import { CollectionProgress, DataQuality, CollectionStats, DetailedStats, SystemStats } from '@/types/admin'
 import { useState, useEffect } from 'react'
 
 interface AdminOverviewTabProps {
@@ -10,20 +10,17 @@ interface AdminOverviewTabProps {
   collectionStats: CollectionStats | null
   detailedStats: DetailedStats | null
   lastUpdated: string
-  selectedDataSource: string
-  setSelectedDataSource: (source: string) => void
   selectedYear: number
   setSelectedYear: (year: number) => void
   isCollecting: boolean
   loading: boolean
-  executeDataCollection: () => Promise<void>
   executeDataFusion: () => Promise<void>
   fetchDataQuality: () => Promise<void>
   fetchCollectionStats: () => Promise<void>
   fetchSystemStats: () => Promise<void>
   fetchMetadata: () => Promise<void>
   fetchProcessingLogs: () => Promise<void>
-  addToast: (toast: Omit<ToastMessage, 'id'>) => void
+  addToast: (toast: any) => void
 }
 
 interface DetailedAnalysisData {
@@ -94,13 +91,10 @@ export default function AdminOverviewTab({
   collectionStats,
   detailedStats,
   lastUpdated,
-  selectedDataSource,
-  setSelectedDataSource,
   selectedYear,
   setSelectedYear,
   isCollecting,
   loading,
-  executeDataCollection,
   executeDataFusion,
   fetchDataQuality,
   fetchCollectionStats,
@@ -123,28 +117,37 @@ export default function AdminOverviewTab({
   const [isMissingDataExpanded, setIsMissingDataExpanded] = useState(false)
 
   // 상세 분석 데이터 로드
-  const fetchDetailedAnalysis = async (year: number = 2024) => {
+  const fetchDetailedAnalysis = async (year: number = 2024, showToast: boolean = false) => {
     setIsLoadingDetailedAnalysis(true)
     try {
-      const response = await fetch(`http://localhost:8002/api/v1/capitalflows/admin/detailed-analysis/?year=${year}`)
+        const response = await fetch(`http://localhost:8001/api/v1/capitalflows/admin/detailed-analysis/?year=${year}`)
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
           setDetailedAnalysis(data.data)
-          addToast({
-            type: 'success',
-            title: '상세 분석 완료',
-            message: `총 ${data.data.summary.total_data}개 데이터 분석 완료`
-          })
+          // 중복 데이터 분석과 누락 데이터 분석도 함께 실행
+          await fetchDuplicateAnalysis(year)
+          await fetchMissingDataAnalysis(year)
+          
+          // 수동 새로고침 시에만 팝업 표시
+          if (showToast) {
+            addToast({
+              type: 'success',
+              title: '상세 분석 완료',
+              message: `총 ${data.data.summary.total_data}개 데이터 분석 완료`
+            })
+          }
         }
       }
     } catch (error) {
       console.error('상세 분석 로드 실패:', error)
-      addToast({
-        type: 'error',
-        title: '상세 분석 실패',
-        message: '상세 분석 데이터를 불러오는데 실패했습니다.'
-      })
+      if (showToast) {
+        addToast({
+          type: 'error',
+          title: '상세 분석 실패',
+          message: '상세 분석 데이터를 불러오는데 실패했습니다.'
+        })
+      }
     } finally {
       setIsLoadingDetailedAnalysis(false)
     }
@@ -153,7 +156,7 @@ export default function AdminOverviewTab({
   // 중복 데이터 분석
   const fetchDuplicateAnalysis = async (year: number = 2024) => {
     try {
-      const response = await fetch(`http://localhost:8002/api/v1/capitalflows/admin/duplicate-analysis/?year=${year}`)
+      const response = await fetch(`http://localhost:8001/api/v1/capitalflows/admin/duplicate-analysis/?year=${year}`)
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
@@ -168,7 +171,7 @@ export default function AdminOverviewTab({
   // 누락 데이터 분석
   const fetchMissingDataAnalysis = async (year: number = 2024) => {
     try {
-      const response = await fetch(`http://localhost:8002/api/v1/capitalflows/admin/missing-data-analysis/?year=${year}`)
+      const response = await fetch(`http://localhost:8001/api/v1/capitalflows/admin/missing-data-analysis/?year=${year}`)
       if (response.ok) {
         const data = await response.json()
         if (data.success) {
@@ -182,19 +185,73 @@ export default function AdminOverviewTab({
 
   // 컴포넌트 마운트 시 상세 분석 로드
   useEffect(() => {
-    fetchDetailedAnalysis(selectedAnalysisYear)
-  }, [selectedAnalysisYear])
+    fetchDetailedAnalysis(selectedAnalysisYear, false)
+  }, [])
+
+  // selectedYear 변경 시 selectedAnalysisYear 동기화 및 데이터 다시 로드
+  useEffect(() => {
+    if (selectedYear !== selectedAnalysisYear) {
+      setSelectedAnalysisYear(selectedYear)
+      fetchDetailedAnalysis(selectedYear, false)
+    }
+  }, [selectedYear])
 
   return (
     <div className="space-y-6">
       {/* 시스템 통계 카드 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {systemStats ? (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        {detailedAnalysis ? (
           <>
             <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">2024년 데이터</h3>
-              <p className="text-3xl font-bold text-blue-600">8,215</p>
-              <p className="text-sm text-gray-500">개 레코드 (82.2% 달성)</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">{selectedAnalysisYear}년 데이터</h3>
+              <p className="text-3xl font-bold text-blue-600">{detailedAnalysis.summary.total_data.toLocaleString()}</p>
+              <p className="text-sm text-gray-500">개 레코드</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">국가 커버리지</h3>
+              <p className="text-3xl font-bold text-green-600">{detailedAnalysis.country_analysis.length}</p>
+              <p className="text-sm text-gray-500">개국</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">분야 커버리지</h3>
+              <p className="text-3xl font-bold text-purple-600">{detailedAnalysis.sector_analysis.length}</p>
+              <p className="text-sm text-gray-500">개 분야</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">자본타입 커버리지</h3>
+              <p className="text-3xl font-bold text-orange-600">{detailedAnalysis.capital_analysis.length}</p>
+              <p className="text-sm text-gray-500">개 타입</p>
+            </div>
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">데이터 비율</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">실제 데이터</span>
+                  <span className="text-lg font-bold text-green-600">{detailedAnalysis.summary.real_data}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">추정 데이터</span>
+                  <span className="text-lg font-bold text-yellow-600">{detailedAnalysis.summary.estimated_data}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-green-500 h-2 rounded-full" 
+                    style={{ width: `${(detailedAnalysis.summary.real_data / detailedAnalysis.summary.total_data) * 100}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-gray-500">
+                  실제 {((detailedAnalysis.summary.real_data / detailedAnalysis.summary.total_data) * 100).toFixed(1)}% / 
+                  추정 {((detailedAnalysis.summary.estimated_data / detailedAnalysis.summary.total_data) * 100).toFixed(1)}%
+                </p>
+              </div>
+            </div>
+          </>
+        ) : systemStats ? (
+          <>
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">{selectedYear}년 데이터</h3>
+              <p className="text-3xl font-bold text-blue-600">{(systemStats as any).totalData || 0}</p>
+              <p className="text-sm text-gray-500">개 레코드</p>
             </div>
             <div className="bg-white p-6 rounded-lg shadow">
               <h3 className="text-lg font-medium text-gray-900 mb-2">국가 커버리지</h3>
@@ -227,7 +284,11 @@ export default function AdminOverviewTab({
           <div className="flex items-center gap-4">
             <select
               value={selectedAnalysisYear}
-              onChange={(e) => setSelectedAnalysisYear(parseInt(e.target.value))}
+              onChange={(e) => {
+                const newYear = parseInt(e.target.value)
+                setSelectedAnalysisYear(newYear)
+                fetchDetailedAnalysis(newYear, false)
+              }}
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {Array.from({length: 10}, (_, i) => 2024 - i).map(year => (
@@ -235,7 +296,7 @@ export default function AdminOverviewTab({
               ))}
             </select>
             <button
-              onClick={() => fetchDetailedAnalysis(selectedAnalysisYear)}
+              onClick={() => fetchDetailedAnalysis(selectedAnalysisYear, true)}
               disabled={isLoadingDetailedAnalysis}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
             >
@@ -251,7 +312,12 @@ export default function AdminOverviewTab({
           </div>
         </div>
 
-        {detailedAnalysis ? (
+        {isLoadingDetailedAnalysis ? (
+          <div className="text-center py-8 text-gray-500">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-2"></div>
+            상세 분석 데이터를 불러오는 중...
+          </div>
+        ) : detailedAnalysis ? (
           <div className="space-y-6">
             {/* 요약 통계 */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -526,6 +592,126 @@ export default function AdminOverviewTab({
                 </div>
               )}
             </div>
+
+            {/* 중복 데이터 분석 */}
+            {duplicateAnalysis && (
+              <div className="bg-white border rounded-lg mt-6">
+                <div className="flex items-center justify-between p-4 border-b">
+                  <h4 className="font-semibold text-gray-700">🔄 중복 데이터 분석</h4>
+                  <button
+                    onClick={() => setIsDuplicateAnalysisExpanded(!isDuplicateAnalysisExpanded)}
+                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  >
+                    {isDuplicateAnalysisExpanded ? '접기' : '펼치기'}
+                    <span className="text-xs">{isDuplicateAnalysisExpanded ? '▲' : '▼'}</span>
+                  </button>
+                </div>
+                {isDuplicateAnalysisExpanded && (
+                  <div className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div className="bg-red-50 p-4 rounded-lg">
+                        <div className="text-2xl font-bold text-red-600">{duplicateAnalysis.total_duplicates || 0}</div>
+                        <div className="text-sm text-gray-600">총 중복 데이터</div>
+                      </div>
+                      <div className="bg-orange-50 p-4 rounded-lg">
+                        <div className="text-2xl font-bold text-orange-600">{duplicateAnalysis.duplicate_groups || 0}</div>
+                        <div className="text-sm text-gray-600">중복 그룹</div>
+                      </div>
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-600">{duplicateAnalysis.duplicate_rate || 0}%</div>
+                        <div className="text-sm text-gray-600">중복 비율</div>
+                      </div>
+                    </div>
+                    
+                    {duplicateAnalysis.country_duplicates && Object.keys(duplicateAnalysis.country_duplicates).length > 0 && (
+                      <div className="mb-4">
+                        <h5 className="font-medium text-gray-700 mb-2">국가별 중복 데이터 (상위 10개)</h5>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                          {Object.entries(duplicateAnalysis.country_duplicates).slice(0, 10).map(([country, count]) => (
+                            <div key={country} className="bg-gray-50 p-2 rounded text-sm">
+                              <span className="font-medium">{country}</span>: {count as number}개
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {duplicateAnalysis.sector_duplicates && Object.keys(duplicateAnalysis.sector_duplicates).length > 0 && (
+                      <div>
+                        <h5 className="font-medium text-gray-700 mb-2">분야별 중복 데이터 (상위 10개)</h5>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                          {Object.entries(duplicateAnalysis.sector_duplicates).slice(0, 10).map(([sector, count]) => (
+                            <div key={sector} className="bg-gray-50 p-2 rounded text-sm">
+                              <span className="font-medium">{sector}</span>: {count as number}개
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 누락 데이터 분석 */}
+            {missingDataAnalysis && (
+              <div className="bg-white border rounded-lg mt-6">
+                <div className="flex items-center justify-between p-4 border-b">
+                  <h4 className="font-semibold text-gray-700">❌ 누락 데이터 분석</h4>
+                  <button
+                    onClick={() => setIsMissingDataExpanded(!isMissingDataExpanded)}
+                    className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  >
+                    {isMissingDataExpanded ? '접기' : '펼치기'}
+                    <span className="text-xs">{isMissingDataExpanded ? '▲' : '▼'}</span>
+                  </button>
+                </div>
+                {isMissingDataExpanded && (
+                  <div className="p-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div className="bg-red-50 p-4 rounded-lg">
+                        <div className="text-2xl font-bold text-red-600">{missingDataAnalysis.total_missing || 0}</div>
+                        <div className="text-sm text-gray-600">총 누락 조합</div>
+                      </div>
+                      <div className="bg-orange-50 p-4 rounded-lg">
+                        <div className="text-2xl font-bold text-orange-600">{missingDataAnalysis.missing_countries || 0}</div>
+                        <div className="text-sm text-gray-600">데이터 부족 국가</div>
+                      </div>
+                      <div className="bg-blue-50 p-4 rounded-lg">
+                        <div className="text-2xl font-bold text-blue-600">{missingDataAnalysis.missing_sectors || 0}</div>
+                        <div className="text-sm text-gray-600">데이터 부족 분야</div>
+                      </div>
+                    </div>
+                    
+                    {missingDataAnalysis.country_missing && Object.keys(missingDataAnalysis.country_missing).length > 0 && (
+                      <div className="mb-4">
+                        <h5 className="font-medium text-gray-700 mb-2">데이터 부족 국가 (상위 10개)</h5>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                          {Object.entries(missingDataAnalysis.country_missing).slice(0, 10).map(([country, count]) => (
+                            <div key={country} className="bg-red-50 p-2 rounded text-sm">
+                              <span className="font-medium">{country}</span>: {count as number}개 누락
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {missingDataAnalysis.sector_missing && Object.keys(missingDataAnalysis.sector_missing).length > 0 && (
+                      <div>
+                        <h5 className="font-medium text-gray-700 mb-2">데이터 부족 분야 (상위 10개)</h5>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                          {Object.entries(missingDataAnalysis.sector_missing).slice(0, 10).map(([sector, count]) => (
+                            <div key={sector} className="bg-red-50 p-2 rounded text-sm">
+                              <span className="font-medium">{sector}</span>: {count as number}개 누락
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-8 text-gray-500">
@@ -550,27 +736,27 @@ export default function AdminOverviewTab({
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-green-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{dataQuality.high_quality_count}</div>
+                <div className="text-2xl font-bold text-green-600">{(dataQuality as any).high_quality_count || 0}</div>
                 <div className="text-sm text-gray-600">고품질 데이터</div>
               </div>
               <div className="bg-yellow-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-yellow-600">{dataQuality.medium_quality_count}</div>
+                <div className="text-2xl font-bold text-yellow-600">{(dataQuality as any).medium_quality_count || 0}</div>
                 <div className="text-sm text-gray-600">중품질 데이터</div>
               </div>
               <div className="bg-red-50 p-4 rounded-lg">
-                <div className="text-2xl font-bold text-red-600">{dataQuality.low_quality_count}</div>
+                <div className="text-2xl font-bold text-red-600">{(dataQuality as any).low_quality_count || 0}</div>
                 <div className="text-sm text-gray-600">저품질 데이터</div>
               </div>
             </div>
             <div className="bg-gray-50 p-4 rounded-lg">
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-gray-700">평균 품질 점수</span>
-                <span className="text-2xl font-bold text-blue-600">{(dataQuality.avg_quality_score * 100).toFixed(1)}%</span>
+                <span className="text-2xl font-bold text-blue-600">{((dataQuality as any).avg_quality_score * 100 || 0).toFixed(1)}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
                 <div
                   className="bg-blue-500 h-2 rounded-full"
-                  style={{ width: `${dataQuality.avg_quality_score * 100}%` }}
+                  style={{ width: `${(dataQuality as any).avg_quality_score * 100 || 0}%` }}
                 ></div>
               </div>
             </div>
