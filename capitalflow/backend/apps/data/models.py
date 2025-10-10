@@ -51,6 +51,8 @@ class Country(models.Model):
     name_en = models.CharField(max_length=100, verbose_name='영문명')
     region = models.CharField(max_length=50, blank=True, verbose_name='지역')
     continent = models.CharField(max_length=30, blank=True, verbose_name='대륙')
+    latitude = models.FloatField(null=True, blank=True, verbose_name='위도')
+    longitude = models.FloatField(null=True, blank=True, verbose_name='경도')
     is_active = models.BooleanField(default=True, verbose_name='활성 여부')
     
     class Meta:
@@ -126,6 +128,19 @@ class RawCapitalData(models.Model):
     )
     is_outlier = models.BooleanField(default=False, verbose_name='이상치 여부')
     is_verified = models.BooleanField(default=False, verbose_name='검증 완료')
+    
+    # 추정 데이터 관련 필드
+    is_estimated = models.BooleanField(default=False, verbose_name='추정 데이터 여부')
+    confidence_score = models.FloatField(
+        null=True, blank=True,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+        verbose_name='신뢰도 점수'
+    )
+    estimation_method = models.CharField(
+        max_length=100, 
+        null=True, blank=True, 
+        verbose_name='추정 방법'
+    )
     
     class Meta:
         db_table = 'raw_capital_data'

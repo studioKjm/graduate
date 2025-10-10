@@ -91,7 +91,7 @@ export default function BulkLoadingSectorMap({
       const timeoutId = setTimeout(() => controller.abort(), 2000) // 2초 타임아웃
       
       const response = await fetch(
-        `http://localhost:8001/api/v1/capitalflows/capitalflows/?${params}`,
+        `http://localhost:8001/api/v1/visualization/map-data/?${params}`,
         { 
           signal: controller.signal,
           headers: {
@@ -110,10 +110,10 @@ export default function BulkLoadingSectorMap({
       const data = await response.json()
       const processedData: { [countryCode: string]: number } = {}
       
-      if (data.results && Array.isArray(data.results)) {
-        data.results.forEach((item: any) => {
-          if (item.country_code && item.total_amount !== undefined) {
-            processedData[item.country_code] = parseFloat(item.total_amount) || 0
+      if (data.success && data.data && data.data.countries && Array.isArray(data.data.countries)) {
+        data.data.countries.forEach((country: any) => {
+          if (country.code && country.total_amount !== undefined) {
+            processedData[country.code] = parseFloat(country.total_amount) || 0
           }
         })
       }

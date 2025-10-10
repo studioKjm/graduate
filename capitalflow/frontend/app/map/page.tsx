@@ -21,7 +21,7 @@ export default function MapPage() {
   ]
   
   const [mapFilters, setMapFilters] = useState({
-    year: 2023,
+    year: 2020,
     sector: '',
     capitalTypes: allCapitalTypes,
     visualizationType: 'choropleth' as 'choropleth' | 'flow' | 'both'

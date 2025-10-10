@@ -250,8 +250,14 @@ export default function AdminOverviewTab({
           <>
             <div className="bg-white p-6 rounded-lg shadow">
               <h3 className="text-lg font-medium text-gray-900 mb-2">{selectedYear}년 데이터</h3>
-              <p className="text-3xl font-bold text-blue-600">{(systemStats as any).totalData || 0}</p>
+              <p className="text-3xl font-bold text-blue-600">
+                {collectionStats?.year_stats?.find((year: any) => year.year === selectedYear)?.total || 0}
+              </p>
               <p className="text-sm text-gray-500">개 레코드</p>
+              <div className="mt-2 text-xs text-gray-400">
+                실제: {collectionStats?.year_stats?.find((year: any) => year.year === selectedYear)?.real_count || 0}개 | 
+                추정: {collectionStats?.year_stats?.find((year: any) => year.year === selectedYear)?.estimated_count || 0}개
+              </div>
             </div>
             <div className="bg-white p-6 rounded-lg shadow">
               <h3 className="text-lg font-medium text-gray-900 mb-2">국가 커버리지</h3>

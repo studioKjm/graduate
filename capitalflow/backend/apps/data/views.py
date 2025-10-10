@@ -785,6 +785,9 @@ class CollectionStatsAPIView(APIView):
                 # 신뢰도 표시
                 confidence_display = f"{overall_confidence * 100:.1f}% ({confidence_grade})"
                 
+                # 데이터 타입 결정
+                data_type = '실제 데이터' if real_count > estimated_count else '추정 데이터'
+                
                 # 추가 정보
                 year_stat.update({
                     'avg_quality': round(float(overall_confidence), 2),
@@ -2391,16 +2394,33 @@ class FourthStageEstimationAPIView(APIView):
                     capital_type_obj = CapitalType.objects.get(code=capital_type_code)
                     source_obj, created = DataSource.objects.get_or_create(
                         name=source,
-                        defaults={'description': f'4단계 추정 데이터 - {estimation_method} 방법'}
+                        defaults={
+                            'description': f'4단계 추정 데이터 - {estimation_method} 방법',
+                            'source_type': 'API',
+                            'reliability_level': 'LOW',
+                            'reliability_weight': 0.3,
+                            'is_active': True
+                        }
                     )
+                    
+                    # 기존 객체인 경우 필드 업데이트
+                    if not created:
+                        if not source_obj.reliability_weight:
+                            source_obj.reliability_weight = 0.3
+                        if not source_obj.reliability_level:
+                            source_obj.reliability_level = 'LOW'
+                        if not source_obj.source_type:
+                            source_obj.source_type = 'API'
+                        source_obj.save()
                     
                     RawCapitalData.objects.create(
                         country=country_obj,
                         sector=sector_obj,
                         capital_type=capital_type_obj,
                         year=year,
-                        amount=estimated_amount,
-                        currency='USD',
+                        raw_amount=estimated_amount,
+                        raw_currency='USD',
+                        amount_usd=estimated_amount,
                         source=source_obj,
                         is_estimated=True,
                         confidence_score=self._calculate_confidence_score(estimation_method),

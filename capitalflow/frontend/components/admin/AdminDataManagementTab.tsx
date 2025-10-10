@@ -87,17 +87,23 @@ export default function AdminDataManagementTab({
   const [isCollectingAll, setIsCollectingAll] = useState(false)
   const [isSupplementingData, setIsSupplementingData] = useState(false)
   const [isAdvancedCollecting, setIsAdvancedCollecting] = useState(false)
-  const [isEstimatingData, setIsEstimatingData] = useState(false)
   const [isFourthStageEstimating, setIsFourthStageEstimating] = useState(false)
   const [collectionResults, setCollectionResults] = useState<any>(null)
   const [supplementResults, setSupplementResults] = useState<any>(null)
   const [advancedResults, setAdvancedResults] = useState<any>(null)
-  const [estimationResults, setEstimationResults] = useState<any>(null)
   const [fourthStageResults, setFourthStageResults] = useState<any>(null)
   const [currentStep, setCurrentStep] = useState(1) // 1: 실제수집, 2: 보충수집, 3: 고급수집, 4: 추정수집, 5: 4단계추정
   const [realDataCount, setRealDataCount] = useState(0)
   const [estimatedDataCount, setEstimatedDataCount] = useState(0)
   const [realDataResults, setRealDataResults] = useState<any>(null)
+  
+  // 완료 상태 관리
+  const [completionStatus, setCompletionStatus] = useState({
+    firstStage: false,
+    secondStage: false,
+    thirdStage: false,
+    fourthStage: false
+  })
   
   const [metadata, setMetadata] = useState({
     countries: [] as Array<{code: string, name: string}>,
@@ -106,7 +112,48 @@ export default function AdminDataManagementTab({
     dataSources: [] as Array<{id: string, name: string, source_type: string}>
   })
 
-  // 메타데이터 로드
+  // 완료 상태 확인 함수
+  const checkCompletionStatus = async () => {
+    try {
+      const response = await fetch('http://localhost:8001/api/v1/capitalflows/admin/collection-stats/')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.year_stats) {
+          const currentYearData = data.year_stats.find((year: any) => year.year === selectedYearForCollection)
+          if (currentYearData) {
+            // 각 단계별 완료 기준 설정
+            const newStatus = {
+              firstStage: currentYearData.real_count >= 500, // 1차: 500개 이상 실제 데이터
+              secondStage: currentYearData.real_count >= 1000, // 2차: 1000개 이상 실제 데이터
+              thirdStage: currentYearData.real_count >= 1500, // 3차: 1500개 이상 실제 데이터
+              fourthStage: currentYearData.estimated_count >= 400 // 4차: 400개 이상 추정 데이터 (현실적 기준)
+            }
+            setCompletionStatus(newStatus)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('완료 상태 확인 실패:', error)
+    }
+  }
+
+  // 데이터 카운트 로드 함수
+  const loadDataCounts = async () => {
+    try {
+      const response = await fetch(`http://localhost:8001/api/v1/capitalflows/admin/detailed-analysis/?year=${selectedYearForCollection}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data && data.data.summary) {
+          setRealDataCount(data.data.summary.real_data || 0)
+          setEstimatedDataCount(data.data.summary.estimated_data || 0)
+        }
+      }
+    } catch (error) {
+      console.error('데이터 카운트 로드 실패:', error)
+    }
+  }
+
+  // 메타데이터 로드 및 완료 상태 확인
   useEffect(() => {
     const fetchMetadata = async () => {
       try {
@@ -124,27 +171,16 @@ export default function AdminDataManagementTab({
         console.error('메타데이터 로드 실패:', error)
       }
     }
-    fetchMetadata()
-  }, [])
-
-  // 현재 데이터 카운트 로드
-  useEffect(() => {
-    const fetchCurrentDataCount = async () => {
-      try {
-        const response = await fetch(`http://localhost:8001/api/v1/capitalflows/admin/detailed-analysis/?year=${selectedYearForCollection}`)
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success) {
-            setRealDataCount(data.data.real_data_count || 0)
-            setEstimatedDataCount(data.data.estimated_data_count || 0)
-          }
-        }
-      } catch (error) {
-        console.error('데이터 카운트 로드 실패:', error)
-      }
+    
+    const initializeData = async () => {
+      await fetchMetadata()
+      await checkCompletionStatus()
+      await loadDataCounts()
     }
-    fetchCurrentDataCount()
+    
+    initializeData()
   }, [selectedYearForCollection])
+
 
   // 데이터 불균형 분석
   const analyzeDataImbalance = async () => {
@@ -208,6 +244,9 @@ export default function AdminDataManagementTab({
         setRealDataCount(result.data.real_data || 0)
         setEstimatedDataCount(result.data.estimated_data || 0)
         
+        // 완료 상태 업데이트
+        await checkCompletionStatus()
+        
         addToast({
           type: 'success',
           title: '1단계: 실제 데이터 수집 완료',
@@ -263,6 +302,9 @@ export default function AdminDataManagementTab({
         setSupplementResults(result.data)
         setRealDataCount(result.data.real_data_count || 0)
         setEstimatedDataCount(result.data.estimated_data_count || 0)
+        
+        // 완료 상태 업데이트
+        await checkCompletionStatus()
         
         addToast({
           type: 'success',
@@ -396,61 +438,6 @@ export default function AdminDataManagementTab({
     }
   }
 
-  // 5단계: 누락 조합 추정치 수집
-  const executeEstimationDataCollection = async () => {
-    setIsEstimatingData(true)
-    setEstimationResults(null)
-    setCurrentStep(5)
-    
-    try {
-      console.log('🔍 4단계: 누락 조합 추정치 수집 시작:', selectedYearForCollection)
-      
-      const response = await fetch('http://localhost:8001/api/v1/capitalflows/admin/massive-collect/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          year: selectedYearForCollection,
-          estimate_missing_data: true,
-          target_estimated_data: 4000
-        })
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      
-      const result = await response.json()
-      console.log('📊 3단계 추정 수집 결과:', result)
-      
-      if (result.success) {
-        setEstimationResults(result.data)
-        setEstimatedDataCount(result.data.total_estimated_data || 0)
-        
-        addToast({
-          type: 'success',
-          title: '3단계: 추정 데이터 수집 완료',
-          message: `추가 ${result.data.estimated_data}개 추정 데이터 생성 (총 추정: ${result.data.total_estimated_data}개)`
-        })
-      } else {
-        addToast({
-          type: 'error',
-          title: '3단계: 추정 데이터 수집 실패',
-          message: result.message || '알 수 없는 오류가 발생했습니다.'
-        })
-      }
-    } catch (error) {
-      console.error('❌ 3단계 추정 수집 오류:', error)
-      
-      addToast({
-        type: 'error',
-        title: '3단계: 추정 데이터 수집 실패',
-        message: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.'
-      })
-    } finally {
-      setIsEstimatingData(false)
-    }
-  }
-
   // 모든 조합 계산
   const calculateAllCombinations = (year: number) => {
     // 하드코딩된 값 사용 (100개국 × 30개 분야 × 11개 자본타입 = 33,000개)
@@ -526,7 +513,14 @@ export default function AdminDataManagementTab({
 
         {/* 1단계: 실제 데이터 수집 */}
         <div className="border rounded-lg p-4 bg-green-50 mb-6">
-          <h4 className="font-medium text-gray-900 mb-2">1단계: 실제 데이터 수집 (우선순위 1)</h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-medium text-gray-900">1단계: 실제 데이터 수집 (우선순위 1)</h4>
+            {completionStatus.firstStage && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                ✅ 완료
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-600 mb-4">
             실제 데이터 소스에서 직접 수집 가능한 데이터를 우선적으로 수집합니다. 목표: 2,000개 실제 데이터
           </p>
@@ -610,7 +604,14 @@ export default function AdminDataManagementTab({
 
         {/* 2단계: 보충 데이터 수집 */}
         <div className="border rounded-lg p-4 bg-blue-50 mb-6">
-          <h4 className="font-medium text-gray-900 mb-2">2단계: 보충 데이터 수집 (우선순위 2)</h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-medium text-gray-900">2단계: 보충 데이터 수집 (우선순위 2)</h4>
+            {completionStatus.secondStage && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                ✅ 완료
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-600 mb-4">
             추가 소스에서 실제 데이터를 더 수집하여 목표 2,000개를 달성합니다.
           </p>
@@ -694,7 +695,14 @@ export default function AdminDataManagementTab({
 
         {/* 3단계: 고급 3차 수집 */}
         <div className="border rounded-lg p-4 bg-purple-50 mb-6">
-          <h4 className="font-medium text-gray-900 mb-2">3단계: 고급 3차 수집 (우선순위 3)</h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-medium text-gray-900">3단계: 고급 3차 수집 (우선순위 3)</h4>
+            {completionStatus.thirdStage && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                ✅ 완료
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-600 mb-4">
             부족한 자본타입(VC, MA, IPO, PE, SWF 등) 중심으로 웹스크래핑, 뉴스, 정부데이터를 활용한 고품질 데이터 수집
           </p>
@@ -780,7 +788,14 @@ export default function AdminDataManagementTab({
 
         {/* 4단계: 누락 데이터 기반 추정 */}
         <div className="border rounded-lg p-4 bg-indigo-50 mb-6">
-          <h4 className="font-medium text-gray-900 mb-2">4단계: 누락 데이터 기반 추정 (우선순위 4)</h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="font-medium text-gray-900">4단계: 누락 데이터 기반 추정 (우선순위 4)</h4>
+            {completionStatus.fourthStage && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                ✅ 완료
+              </span>
+            )}
+          </div>
           <p className="text-sm text-gray-600 mb-4">
             실제 데이터 기반으로 누락된 조합을 분석하고 지능형 추정 방법을 활용하여 고품질 추정 데이터 생성
           </p>
@@ -865,89 +880,6 @@ export default function AdminDataManagementTab({
           )}
         </div>
 
-        {/* 5단계: 추정 데이터 생성 */}
-        <div className="border rounded-lg p-4 bg-orange-50 mb-6">
-          <h4 className="font-medium text-gray-900 mb-2">5단계: 추정 데이터 생성 (우선순위 5)</h4>
-          <p className="text-sm text-gray-600 mb-4">
-            실제 데이터가 없는 조합에 대해 추정 데이터를 생성합니다. 목표: 4,000개 추정 데이터
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                수집 연도
-              </label>
-              <select
-                value={selectedYearForCollection}
-                onChange={(e) => setSelectedYearForCollection(parseInt(e.target.value))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-              >
-                {Array.from({length: 10}, (_, i) => 2024 - i).map(year => (
-                  <option key={year} value={year}>{year}년</option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="flex items-end">
-              <button
-                onClick={executeEstimationDataCollection}
-                disabled={isEstimatingData}
-                className="w-full bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50 flex items-center justify-center"
-              >
-                {isEstimatingData ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    추정 데이터 생성 중...
-                  </>
-                ) : (
-                  '🔮 4단계: 추정 데이터 생성'
-                )}
-              </button>
-            </div>
-            
-            <div className="flex items-end">
-              <div className="w-full text-sm text-gray-600 bg-gray-50 p-3 rounded-md">
-                <div className="font-medium">목표: 4,000개 추정 데이터</div>
-                <div className="text-lg font-bold text-orange-600">현재: {estimatedDataCount}개</div>
-                <div className="text-xs">알고리즘으로 추정</div>
-              </div>
-            </div>
-          </div>
-
-          {/* 4단계 결과 */}
-          {estimationResults && (
-            <div className="mt-4 p-4 bg-white rounded-md border">
-              <h5 className="font-medium text-gray-700 mb-3">4단계 생성 결과</h5>
-              
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                <div className="bg-orange-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-orange-600">{estimationResults.total_collected?.toLocaleString() || 0}</div>
-                  <div className="text-sm text-gray-600">추정 데이터</div>
-                </div>
-                <div className="bg-green-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-green-600">{estimationResults.collected_combinations?.toLocaleString() || 0}</div>
-                  <div className="text-sm text-gray-600">생성된 조합</div>
-                </div>
-                <div className="bg-blue-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-blue-600">{estimationResults.total_combinations?.toLocaleString() || 0}</div>
-                  <div className="text-sm text-gray-600">총 조합</div>
-                </div>
-                <div className="bg-purple-50 p-3 rounded-md">
-                  <div className="text-2xl font-bold text-purple-600">{((estimationResults.collected_combinations / estimationResults.total_combinations) * 100)?.toFixed(1) || 0}%</div>
-                  <div className="text-sm text-gray-600">달성률</div>
-                </div>
-              </div>
-
-              <div className="text-sm text-gray-600">
-                <div>추정 데이터 생성: {estimationResults.collected_combinations?.toLocaleString() || 0}개 / {estimationResults.total_combinations?.toLocaleString() || 0}개 조합</div>
-                <div>남은 조합: {(estimationResults.total_combinations - estimationResults.collected_combinations)?.toLocaleString() || 0}개</div>
-              </div>
-            </div>
-          )}
-        </div>
 
 
         {/* 4. 데이터 품질 관리 */}

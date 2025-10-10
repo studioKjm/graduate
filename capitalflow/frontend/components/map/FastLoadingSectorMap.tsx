@@ -86,7 +86,7 @@ export default function FastLoadingSectorMap({
       }
       params.append('aggregate', 'true')
       
-      const url = `http://localhost:8001/api/v1/capitalflows/capitalflows/?${params}`
+      const url = `http://localhost:8001/api/v1/visualization/map-data/?${params}`
       console.log(`🔍 Fetching: ${url}`)
       
       const response = await fetch(url, { 
@@ -105,14 +105,14 @@ export default function FastLoadingSectorMap({
       }
 
       const data = await response.json()
-      console.log(`📊 Year ${year} response:`, data.count, 'countries')
+      console.log(`📊 Year ${year} response:`, data.data?.countries?.length || 0, 'countries')
       
       const processedData: { [countryCode: string]: number } = {}
       
-      if (data.results && Array.isArray(data.results)) {
-        data.results.forEach((item: any) => {
-          if (item.country_code && item.total_amount !== undefined) {
-            processedData[item.country_code] = parseFloat(item.total_amount) || 0
+      if (data.success && data.data && data.data.countries && Array.isArray(data.data.countries)) {
+        data.data.countries.forEach((country: any) => {
+          if (country.code && country.total_amount !== undefined) {
+            processedData[country.code] = parseFloat(country.total_amount) || 0
           }
         })
         console.log(`✅ Year ${year} processed:`, Object.keys(processedData).length, 'countries')

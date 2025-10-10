@@ -80,7 +80,7 @@ class DataCache {
       }
       params.append('aggregate', 'true')
       
-      const response = await fetch(`http://localhost:8001/api/v1/capitalflows/capitalflows/?${params}`)
+      const response = await fetch(`http://localhost:8001/api/v1/visualization/map-data/?${params}`)
       if (response.ok) {
         const data = await response.json()
         this.setApiData(cacheKey, data.results || [])
@@ -127,7 +127,7 @@ export default function OptimizedSectorBasedMap({
       }
       params.append('aggregate', 'true')
       
-      const response = await fetch(`http://localhost:8001/api/v1/capitalflows/capitalflows/?${params}`)
+      const response = await fetch(`http://localhost:8001/api/v1/visualization/map-data/?${params}`)
       
       if (!response.ok) {
         console.warn('API 호출 실패, 빈 배열 반환')
@@ -135,12 +135,29 @@ export default function OptimizedSectorBasedMap({
       }
 
       const data = await response.json()
-      const results = data.results || []
       
-      // 캐시에 저장
-      cache.setApiData(cacheKey, results)
-      
-      return results
+      if (data.success && data.data && data.data.countries) {
+        // 새로운 API 형식으로 변환
+        const results = data.data.countries.map((country: any) => ({
+          country_code: country.code,
+          country_name: country.name,
+          total_amount: country.total_amount,
+          data_count: country.data_count,
+          real_data_count: country.real_data_count,
+          estimated_data_count: country.estimated_data_count,
+          latitude: country.latitude,
+          longitude: country.longitude,
+          capital_types: country.capital_types
+        }))
+        
+        // 캐시에 저장
+        cache.setApiData(cacheKey, results)
+        
+        return results
+      } else {
+        console.warn('API 응답 형식이 예상과 다릅니다:', data)
+        return []
+      }
     } catch (error) {
       console.error('API 호출 중 오류:', error)
       return []
