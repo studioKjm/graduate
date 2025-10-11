@@ -74,6 +74,12 @@ export default function FastLoadingSectorMap({
 
   // 🎯 최적화된 API 호출 (타임아웃 설정)
   const fetchYearDataOptimized = async (sector: string, capitalTypes: string[], year: number) => {
+    // 자본타입이 전체해제된 경우 빈 결과 반환
+    if (capitalTypes.length === 0) {
+      console.log('🚫 No capital types selected, returning empty data')
+      return {}
+    }
+
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 3000) // 3초 타임아웃
 
@@ -138,9 +144,50 @@ export default function FastLoadingSectorMap({
     console.log('Available years:', Object.keys(allYearlyData))
     console.log('Map data exists:', !!mapData)
     
-    if (!mapData || !allYearlyData[year]) {
-      console.warn(`❌ Missing data - mapData: ${!!mapData}, yearData: ${!!allYearlyData[year]}`)
+    if (!mapData) {
+      console.warn(`❌ Missing mapData`)
       return null
+    }
+
+    // 자본타입이 전체해제된 경우 즉시 빈 데이터 반환
+    if (capitalTypes.length === 0) {
+      console.log('🚫 No capital types selected, showing empty map')
+      return {
+        type: 'FeatureCollection',
+        features: mapData.features.map((feature: any) => ({
+          ...feature,
+          properties: {
+            ...feature.properties,
+            country_name: feature.properties?.NAME || feature.properties?.name || feature.id,
+            country_code: feature.id,
+            capital_amount: 0,
+            intensity: 0,
+            selected_capital_types: '선택 안함',
+            capital_type_count: 0
+          }
+        }))
+      }
+    }
+
+    // 현재 연도 데이터가 없으면 로딩 중 상태로 표시
+    if (!allYearlyData[year]) {
+      console.log(`⏳ Loading data for year ${year}...`)
+      return {
+        type: 'FeatureCollection',
+        features: mapData.features.map((feature: any) => ({
+          ...feature,
+          properties: {
+            ...feature.properties,
+            country_name: feature.properties?.NAME || feature.properties?.name || feature.id,
+            country_code: feature.id,
+            capital_amount: 0,
+            intensity: 0,
+            selected_capital_types: capitalTypes.join(', '),
+            capital_type_count: capitalTypes.length,
+            loading: true
+          }
+        }))
+      }
     }
 
     const currentYearData = allYearlyData[year]
@@ -196,6 +243,19 @@ export default function FastLoadingSectorMap({
     const initialize = async () => {
       setLoading(true)
       setLoadingProgress(0)
+
+      // 자본타입이 전체해제된 경우 즉시 빈 데이터로 설정
+      if (capitalTypes.length === 0) {
+        console.log('🚫 No capital types selected, showing empty map')
+        const emptyYearlyData: YearlyData = {}
+        for (let year = 1970; year <= 2024; year++) {
+          emptyYearlyData[year] = {}
+        }
+        setAllYearlyData(emptyYearlyData)
+        setLoading(false)
+        setLoadingProgress(0)
+        return
+      }
 
       // 병렬로 GeoJSON과 데이터 로딩 시작
       const [_, yearlyData] = await Promise.all([

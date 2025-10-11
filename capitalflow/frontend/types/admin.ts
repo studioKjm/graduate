@@ -69,6 +69,15 @@ export interface CollectionStats {
   overallCollectionRate?: number
   totalPossibleCombinations?: number
   lastCollection: string | null
+  year_stats?: Array<{
+    year: number
+    count: number
+    total_amount: number
+    avg_amount: number
+    real_count: number
+    estimated_count: number
+    collection_rate: number
+  }>
 }
 
 export interface DetailedStats {

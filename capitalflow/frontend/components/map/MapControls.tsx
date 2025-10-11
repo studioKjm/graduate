@@ -8,7 +8,10 @@ import {
   PauseIcon,
   AdjustmentsHorizontalIcon,
   ChevronDownIcon,
-  ChevronUpIcon
+  ChevronUpIcon,
+  ClockIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon
 } from '@heroicons/react/24/outline'
 
 interface MapControlsProps {
@@ -17,6 +20,8 @@ interface MapControlsProps {
   onCapitalTypeChange?: (types: string[]) => void
   onVisualizationTypeChange?: (type: 'choropleth' | 'flow' | 'both') => void
   onAnimationToggle?: (playing: boolean) => void
+  onAnimationSpeedChange?: (speed: number) => void
+  currentYear?: number // 외부에서 현재 연도를 받아옴
 }
 
 // 백엔드 메타데이터와 동기화된 분야 목록
@@ -53,7 +58,9 @@ export default function MapControls({
   onSectorChange,
   onCapitalTypeChange,
   onVisualizationTypeChange,
-  onAnimationToggle
+  onAnimationToggle,
+  onAnimationSpeedChange,
+  currentYear: externalCurrentYear
 }: MapControlsProps) {
   // 모든 자본 타입의 id를 디폴트로 설정
   const allCapitalTypeIds = capitalTypes.map(type => type.id)
@@ -65,8 +72,10 @@ export default function MapControls({
   const [selectedCapitalTypes, setSelectedCapitalTypes] = useState<string[]>(allCapitalTypeIds)
   const [visualizationType, setVisualizationType] = useState<'choropleth' | 'flow' | 'both'>('choropleth')
   const [isAnimating, setIsAnimating] = useState(false)
+  const [animationSpeed, setAnimationSpeed] = useState(1000) // 밀리초 단위 (1초)
   const [isExpanded, setIsExpanded] = useState(true)
   const [isSelectedTypesExpanded, setIsSelectedTypesExpanded] = useState(false) // 디폴트로 접어둠
+  const [showSpeedControls, setShowSpeedControls] = useState(false) // 속도 조절 패널 표시 여부
 
   // 즉시 반응하는 연도 변경 핸들러
   const handleYearChange = (year: number) => {
@@ -140,10 +149,22 @@ export default function MapControls({
     onAnimationToggle?.(!isAnimating)
   }
 
+  const handleAnimationSpeedChange = (speed: number) => {
+    setAnimationSpeed(speed)
+    onAnimationSpeedChange?.(speed)
+  }
+
   // 초기 상태에서 모든 자본 타입이 선택된 상태를 부모에게 알려줌
   useEffect(() => {
     onCapitalTypeChange?.(allCapitalTypeIds)
   }, []) // 빈 배열로 마운트 시에만 실행
+
+  // 외부에서 연도가 변경될 때 내부 상태 동기화
+  useEffect(() => {
+    if (externalCurrentYear !== undefined && externalCurrentYear !== currentYear) {
+      setCurrentYear(externalCurrentYear)
+    }
+  }, [externalCurrentYear])
 
   // 현재 연도가 설정된 범위에 맞는지 확인하고 조정
   useEffect(() => {
@@ -261,27 +282,114 @@ export default function MapControls({
           </div>
 
           {/* 애니메이션 제어 */}
-          <div>
-            <button
-              onClick={toggleAnimation}
-              className={`w-full flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
-                isAnimating
-                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                  : 'bg-primary-100 text-primary-700 hover:bg-primary-200'
-              }`}
-            >
-              {isAnimating ? (
-                <>
-                  <PauseIcon className="h-4 w-4 mr-2" />
-                  애니메이션 중지
-                </>
-              ) : (
-                <>
-                  <PlayIcon className="h-4 w-4 mr-2" />
-                  애니메이션 재생
-                </>
-              )}
-            </button>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <button
+                onClick={toggleAnimation}
+                className={`flex-1 flex items-center justify-center px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                  isAnimating
+                    ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                    : 'bg-primary-100 text-primary-700 hover:bg-primary-200'
+                }`}
+              >
+                {isAnimating ? (
+                  <>
+                    <PauseIcon className="h-4 w-4 mr-2" />
+                    중지
+                  </>
+                ) : (
+                  <>
+                    <PlayIcon className="h-4 w-4 mr-2" />
+                    재생
+                  </>
+                )}
+              </button>
+              
+              <button
+                onClick={() => setShowSpeedControls(!showSpeedControls)}
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 ${
+                  showSpeedControls
+                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                title="애니메이션 속도 조절"
+              >
+                <ClockIcon className="h-4 w-4" />
+              </button>
+            </div>
+            
+            {/* 애니메이션 속도 조절 패널 */}
+            {showSpeedControls && (
+              <div className="p-3 bg-gray-50 rounded-md border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs text-gray-600 font-medium">
+                    애니메이션 속도: {animationSpeed}ms
+                  </label>
+                  <button
+                    onClick={() => setShowSpeedControls(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    ×
+                  </button>
+                </div>
+                
+                {/* 빠른 속도 조절 버튼들 */}
+                <div className="flex gap-1 mb-3">
+                  <button
+                    onClick={() => handleAnimationSpeedChange(500)}
+                    className={`px-2 py-1 text-xs rounded ${
+                      animationSpeed === 500 ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    빠름
+                  </button>
+                  <button
+                    onClick={() => handleAnimationSpeedChange(1000)}
+                    className={`px-2 py-1 text-xs rounded ${
+                      animationSpeed === 1000 ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    보통
+                  </button>
+                  <button
+                    onClick={() => handleAnimationSpeedChange(2000)}
+                    className={`px-2 py-1 text-xs rounded ${
+                      animationSpeed === 2000 ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    느림
+                  </button>
+                  <button
+                    onClick={() => handleAnimationSpeedChange(3000)}
+                    className={`px-2 py-1 text-xs rounded ${
+                      animationSpeed === 3000 ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    매우 느림
+                  </button>
+                </div>
+                
+                {/* 세밀한 속도 조절 슬라이더 */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <ChevronLeftIcon className="h-3 w-3 text-gray-400" />
+                    <input
+                      type="range"
+                      min="500"
+                      max="3000"
+                      step="250"
+                      value={animationSpeed}
+                      onChange={(e) => handleAnimationSpeedChange(parseInt(e.target.value))}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                      style={{
+                        background: `linear-gradient(to right, #10b981 0%, #10b981 ${((animationSpeed - 500) / (3000 - 500)) * 100}%, #e5e7eb ${((animationSpeed - 500) / (3000 - 500)) * 100}%, #e5e7eb 100%)`
+                      }}
+                    />
+                    <ChevronRightIcon className="h-3 w-3 text-gray-400" />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 분야 선택 */}

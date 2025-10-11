@@ -14,6 +14,15 @@ const nextConfig = {
           },
         ],
       },
+      {
+        source: '/_next/static/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
     ]
   },
   env: {
@@ -29,6 +38,13 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // 개발 모드에서 캐시 비활성화
+  ...(process.env.NODE_ENV === 'development' && {
+    onDemandEntries: {
+      maxInactiveAge: 25 * 1000,
+      pagesBufferLength: 2,
+    },
+  }),
 }
 
 module.exports = nextConfig

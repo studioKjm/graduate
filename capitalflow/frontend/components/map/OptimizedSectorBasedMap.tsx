@@ -58,6 +58,14 @@ class DataCache {
     return this.apiCache.get(key) || null
   }
 
+  // 모든 캐시 초기화
+  clearAll(): void {
+    this.geoCache.clear()
+    this.apiCache.clear()
+    this.cacheTimestamps.clear()
+    console.log('🗑️ All cache cleared')
+  }
+
   // 배치로 여러 연도 데이터 미리 로드
   async preloadYearRange(sector: string, capitalTypes: string[], startYear: number, endYear: number): Promise<void> {
     const promises = []
@@ -71,6 +79,13 @@ class DataCache {
   }
 
   private async fetchSingleYear(sector: string, capitalTypes: string[], year: number, cacheKey: string): Promise<void> {
+    // 자본타입이 전체해제된 경우 빈 결과 반환
+    if (capitalTypes.length === 0) {
+      console.log('🚫 No capital types selected, returning empty data')
+      this.setApiData(cacheKey, [])
+      return
+    }
+
     try {
       const params = new URLSearchParams()
       if (sector) params.append('sector', sector)
@@ -106,14 +121,27 @@ export default function OptimizedSectorBasedMap({
 
   const cache = DataCache.getInstance()
 
+  // 캐시 초기화 함수
+  const clearCache = useCallback(() => {
+    cache.clearAll()
+    console.log('🗑️ Cache cleared')
+  }, [cache])
+
+  // 컴포넌트 마운트 시 캐시 초기화 (개발 모드에서만)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      clearCache()
+    }
+  }, [clearCache])
+
   // 최적화된 API 데이터 호출 함수
   const fetchCapitalFlowData = useCallback(async (sector: string, capitalTypes: string[], year: number): Promise<CapitalFlowData[]> => {
     const cacheKey = `${sector}-${capitalTypes.join(',')}-${year}`
     
-    // 캐시에서 먼저 확인
+    // 캐시에서 먼저 확인 (하지만 빈 데이터인 경우 재요청)
     const cachedData = cache.getApiData(cacheKey)
-    if (cachedData) {
-      console.log(`✅ Cache hit for ${year}`)
+    if (cachedData && cachedData.length > 0) {
+      console.log(`✅ Cache hit for ${year} (${cachedData.length} records)`)
       return cachedData
     }
 
@@ -233,11 +261,35 @@ export default function OptimizedSectorBasedMap({
         // 1. GeoJSON 로드 (캐시됨)
         const worldData = await loadGeoData()
         
-        // 2. 현재 연도 데이터 로드
+        // 2. 자본타입이 전체해제된 경우 즉시 빈 데이터로 처리
+        if (capitalTypes.length === 0) {
+          console.log('🚫 No capital types selected, showing empty map')
+          const emptyFeatures = worldData.features.map((feature: any) => ({
+            ...feature,
+            properties: {
+              ...feature.properties,
+              country_name: feature.properties?.NAME || feature.properties?.name || feature.id,
+              country_code: feature.id,
+              capital_amount: 0,
+              intensity: 0,
+              selected_capital_types: '선택 안함',
+              capital_type_count: 0
+            }
+          }))
+          
+          setMapData({ 
+            type: 'FeatureCollection', 
+            features: emptyFeatures 
+          })
+          setLoading(false)
+          return
+        }
+        
+        // 3. 현재 연도 데이터 로드
         const apiData = await fetchCapitalFlowData(sector, capitalTypes, year)
         const apiProcessedData = processApiData(apiData)
         
-        // 3. 지도 데이터 결합
+        // 4. 지도 데이터 결합
         let aggregatedData: { [country: string]: number } = {}
         
         if (Object.keys(apiProcessedData).length > 0) {

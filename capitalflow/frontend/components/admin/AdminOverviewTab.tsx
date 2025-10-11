@@ -297,7 +297,7 @@ export default function AdminOverviewTab({
               }}
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {Array.from({length: 10}, (_, i) => 2024 - i).map(year => (
+              {Array.from({length: 20}, (_, i) => 2024 - i).map(year => (
                 <option key={year} value={year}>{year}년</option>
               ))}
             </select>

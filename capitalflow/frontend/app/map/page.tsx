@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import MapControls from '@/components/map/MapControls'
 import MapLegend from '@/components/map/MapLegend'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
@@ -28,6 +28,8 @@ export default function MapPage() {
   })
   const [isAnimating, setIsAnimating] = useState(false)
   const [mapData, setMapData] = useState<any>({}) // 지도 데이터 상태 추가
+  const [animationInterval, setAnimationInterval] = useState<NodeJS.Timeout | null>(null)
+  const [animationSpeed, setAnimationSpeed] = useState(1000) // 애니메이션 속도 (밀리초)
 
   const handleFiltersChange = (newFilters: Partial<typeof mapFilters>) => {
     setMapFilters(prev => ({ ...prev, ...newFilters }))
@@ -35,7 +37,61 @@ export default function MapPage() {
 
   const handleAnimationToggle = (playing: boolean) => {
     setIsAnimating(playing)
+    
+    if (playing) {
+      // 애니메이션 시작
+      const interval = setInterval(() => {
+        setMapFilters(prev => {
+          const nextYear = prev.year + 1
+          // 연도 범위 체크 (2010-2024)
+          if (nextYear > 2024) {
+            return { ...prev, year: 2010 } // 처음으로 돌아가기
+          }
+          return { ...prev, year: nextYear }
+        })
+      }, animationSpeed) // 설정된 속도로 연도 변경
+      
+      setAnimationInterval(interval)
+    } else {
+      // 애니메이션 중지
+      if (animationInterval) {
+        clearInterval(animationInterval)
+        setAnimationInterval(null)
+      }
+    }
   }
+
+  const handleAnimationSpeedChange = (speed: number) => {
+    setAnimationSpeed(speed)
+    
+    // 애니메이션이 재생 중이면 새로운 속도로 재시작
+    if (isAnimating) {
+      if (animationInterval) {
+        clearInterval(animationInterval)
+      }
+      
+      const interval = setInterval(() => {
+        setMapFilters(prev => {
+          const nextYear = prev.year + 1
+          if (nextYear > 2024) {
+            return { ...prev, year: 2010 }
+          }
+          return { ...prev, year: nextYear }
+        })
+      }, speed)
+      
+      setAnimationInterval(interval)
+    }
+  }
+
+  // 컴포넌트 언마운트 시 애니메이션 정리
+  React.useEffect(() => {
+    return () => {
+      if (animationInterval) {
+        clearInterval(animationInterval)
+      }
+    }
+  }, [animationInterval])
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -54,11 +110,13 @@ export default function MapPage() {
         {/* Map Controls */}
         <div className="absolute top-4 left-4 z-10">
           <MapControls 
+            currentYear={mapFilters.year}
             onYearChange={(year) => handleFiltersChange({ year })}
             onSectorChange={(sector) => handleFiltersChange({ sector })}
             onCapitalTypeChange={(capitalTypes) => handleFiltersChange({ capitalTypes })}
             onVisualizationTypeChange={(visualizationType) => handleFiltersChange({ visualizationType })}
             onAnimationToggle={handleAnimationToggle}
+            onAnimationSpeedChange={handleAnimationSpeedChange}
           />
         </div>
         
@@ -105,7 +163,7 @@ export default function MapPage() {
               </div>
               {isAnimating && (
                 <div className="text-primary-600 font-medium">
-                  ⏵ 애니메이션 재생 중
+                  ⏵ 애니메이션 재생 중 ({animationSpeed}ms 간격)
                 </div>
               )}
             </div>
@@ -120,7 +178,8 @@ export default function MapPage() {
               • 지도를 드래그하여 이동<br/>
               • 마우스 휠로 확대/축소<br/>
               • 국가에 마우스를 올려 정보 확인<br/>
-              • 좌측 컨트롤로 필터 조정
+              • 좌측 컨트롤로 필터 조정<br/>
+              • 애니메이션 버튼으로 연도별 변화 시각화
             </p>
           </div>
         </div>
