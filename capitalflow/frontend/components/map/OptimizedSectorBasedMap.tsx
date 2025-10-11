@@ -87,6 +87,8 @@ class DataCache {
     }
 
     try {
+      console.log(`🔍 Fetching data for year ${year}, sector: ${sector}, capitalTypes: ${capitalTypes.join(',')}`)
+      
       const params = new URLSearchParams()
       if (sector) params.append('sector', sector)
       params.append('year', year.toString())
@@ -95,9 +97,19 @@ class DataCache {
       }
       params.append('aggregate', 'true')
       
-      const response = await fetch(`http://localhost:8001/api/v1/visualization/map-data/?${params}`)
+      const url = `http://localhost:8001/api/v1/visualization/map-data/?${params}`
+      console.log(`🌐 Fetching from: ${url}`)
+      
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      })
+      
       if (response.ok) {
         const data = await response.json()
+        console.log(`📦 Response data for year ${year}:`, data)
         this.setApiData(cacheKey, data.results || [])
       }
     } catch (error) {

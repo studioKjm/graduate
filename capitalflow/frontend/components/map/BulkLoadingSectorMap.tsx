@@ -33,9 +33,9 @@ export default function BulkLoadingSectorMap({
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [isMounted, setIsMounted] = useState(false)
 
-  // 모든 연도 데이터를 한 번에 로딩
+  // 모든 연도 데이터를 한 번에 로딩 (최적화된 버전)
   const loadAllYearData = async (sector: string, capitalTypes: string[]) => {
-    console.log('🚀 Starting bulk data loading...')
+    console.log('🚀 Starting optimized bulk data loading...')
     const yearlyData: YearlyData = {}
     const totalYears = 2024 - 1970 + 1
     let processedYears = 0
@@ -51,41 +51,64 @@ export default function BulkLoadingSectorMap({
 
     try {
       // 현재 연도 우선 로드
+      console.log(`🎯 Priority loading current year ${year}...`)
       const currentYearData = await fetchYearData(sector, capitalTypes, year)
       yearlyData[year] = currentYearData
       processedYears++
       setLoadingProgress((processedYears / totalYears) * 100)
 
-      // 나머지 연도들을 배치로 로딩 (더 작은 배치로 분할)
-      for (let startYear = 1970; startYear <= 2024; startYear += 4) {
-        if (startYear === year) continue // 현재 연도는 이미 로드됨
-        
-        const endYear = Math.min(startYear + 3, 2024)
-        const promises = []
-
-        for (let y = startYear; y <= endYear; y++) {
-          promises.push(fetchYearData(sector, capitalTypes, y))
+      // 최근 10년 데이터만 우선 로드 (성능 최적화)
+      const recentYears = Array.from({ length: 10 }, (_, i) => 2024 - i).filter(y => y !== year)
+      console.log(`📊 Loading recent years: ${recentYears.join(', ')}`)
+      
+      const recentPromises = recentYears.map(y => fetchYearData(sector, capitalTypes, y))
+      const recentResults = await Promise.allSettled(recentPromises)
+      
+      recentResults.forEach((result, index) => {
+        const currentYear = recentYears[index]
+        if (result.status === 'fulfilled') {
+          yearlyData[currentYear] = result.value
+        } else {
+          console.warn(`Failed year ${currentYear}, using empty data`)
+          yearlyData[currentYear] = {}
         }
+        processedYears++
+        setLoadingProgress((processedYears / totalYears) * 100)
+      })
 
-        const results = await Promise.allSettled(promises)
-        
-        results.forEach((result, index) => {
-          const currentYear = startYear + index
-          if (result.status === 'fulfilled') {
-            yearlyData[currentYear] = result.value
-          } else {
-            console.warn(`Failed year ${currentYear}, using empty data`)
-            yearlyData[currentYear] = {}
+      // 나머지 연도들을 백그라운드에서 로딩 (더 큰 배치로)
+      setTimeout(async () => {
+        console.log('🔄 Loading remaining years in background...')
+        for (let startYear = 1970; startYear <= 2014; startYear += 10) {
+          const endYear = Math.min(startYear + 9, 2014)
+          const promises = []
+
+          for (let y = startYear; y <= endYear; y++) {
+            if (!yearlyData[y]) { // 이미 로드된 연도는 스킵
+              promises.push(fetchYearData(sector, capitalTypes, y))
+            }
           }
-          processedYears++
-          setLoadingProgress((processedYears / totalYears) * 100)
-        })
 
-        // UI 업데이트를 위한 작은 지연
-        await new Promise(resolve => setTimeout(resolve, 10))
-      }
+          if (promises.length > 0) {
+            const results = await Promise.allSettled(promises)
+            
+            results.forEach((result, index) => {
+              const currentYear = startYear + index
+              if (result.status === 'fulfilled') {
+                yearlyData[currentYear] = result.value
+              } else {
+                yearlyData[currentYear] = {}
+              }
+            })
+          }
+        }
+        
+        // 백그라운드 로딩 완료 후 상태 업데이트
+        setAllYearlyData({ ...yearlyData })
+        console.log('✅ Background loading completed!')
+      }, 100)
 
-      console.log('✅ Bulk loading completed!', Object.keys(yearlyData).length, 'years loaded')
+      console.log('✅ Priority loading completed!', Object.keys(yearlyData).length, 'years loaded')
       return yearlyData
     } catch (error) {
       console.error('❌ Bulk loading failed:', error)
@@ -96,12 +119,15 @@ export default function BulkLoadingSectorMap({
   // 단일 연도 데이터 로딩
   const fetchYearData = async (sector: string, capitalTypes: string[], year: number) => {
     try {
+      console.log(`🔍 Fetching data for year ${year}, sector: ${sector}, capitalTypes: ${capitalTypes.join(',')}`)
+      
       const params = new URLSearchParams()
       if (sector) params.append('sector', sector)
       params.append('year', year.toString())
       
       // 자본타입이 전체해제된 경우 빈 결과 반환
       if (capitalTypes.length === 0) {
+        console.log('🚫 No capital types, returning empty data')
         return {}
       }
       
@@ -111,34 +137,42 @@ export default function BulkLoadingSectorMap({
       params.append('aggregate', 'true')
       
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 2000) // 2초 타임아웃
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5초 타임아웃으로 증가
       
-      const response = await fetch(
-        `http://localhost:8001/api/v1/visualization/map-data/?${params}`,
-        { 
-          signal: controller.signal,
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
+      const url = `http://localhost:8001/api/v1/visualization/map-data/?${params}`
+      console.log(`🌐 Fetching from: ${url}`)
+      
+      const response = await fetch(url, { 
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
         }
-      )
+      })
       
       clearTimeout(timeoutId)
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
+      console.log(`📦 Response data:`, data)
+      
       const processedData: { [countryCode: string]: number } = {}
       
       if (data.success && data.data && data.data.countries && Array.isArray(data.data.countries)) {
         data.data.countries.forEach((country: any) => {
           if (country.code && country.total_amount !== undefined) {
-            processedData[country.code] = parseFloat(country.total_amount) || 0
+            const amount = parseFloat(country.total_amount) || 0
+            if (amount > 0) {
+              processedData[country.code] = amount
+            }
           }
         })
+        console.log(`✅ Processed ${Object.keys(processedData).length} countries with data`)
+      } else {
+        console.warn('⚠️ Invalid response structure:', data)
       }
       
       return processedData
@@ -146,7 +180,7 @@ export default function BulkLoadingSectorMap({
       if (error.name === 'AbortError') {
         console.warn(`⏱️ Timeout for year ${year}`)
       } else {
-        console.warn(`⚠️ Error loading year ${year}:`, error.message)
+        console.error(`❌ Error loading year ${year}:`, error.message)
       }
       return {}
     }
@@ -154,7 +188,10 @@ export default function BulkLoadingSectorMap({
 
   // 현재 연도의 맵 데이터 생성
   const currentMapData = useMemo(() => {
+    console.log('🗺️ Generating map data for:', { year, sector, capitalTypes: capitalTypes.length })
+    
     if (!mapData) {
+      console.log('❌ No map data available')
       return null
     }
 
@@ -200,9 +237,13 @@ export default function BulkLoadingSectorMap({
     }
 
     const currentYearData = allYearlyData[year]
+    console.log(`📊 Current year data:`, Object.keys(currentYearData).length, 'countries')
+    
     const capitalValues = Object.values(currentYearData).filter(val => val > 0)
+    console.log(`💰 Capital values:`, capitalValues.length, 'non-zero values')
     
     if (capitalValues.length === 0) {
+      console.log('⚠️ No capital values found, showing empty map')
       return {
         type: 'FeatureCollection',
         features: mapData.features.map((feature: any) => ({
@@ -223,6 +264,8 @@ export default function BulkLoadingSectorMap({
     // 더 드라마틱한 색상 분포를 위한 로그 스케일 적용
     const maxCapital = Math.max(...capitalValues)
     const minCapital = Math.min(...capitalValues)
+    
+    console.log(`📈 Capital range: ${minCapital.toLocaleString()} - ${maxCapital.toLocaleString()}`)
     
     // 로그 스케일로 변환하여 더 극적인 색상 변화 생성
     const logMax = Math.log10(maxCapital + 1)
@@ -257,33 +300,44 @@ export default function BulkLoadingSectorMap({
       }
     })
 
+    console.log('✅ Map data generated successfully')
     return {
       type: 'FeatureCollection',
       features: enrichedFeatures
     }
-  }, [mapData, allYearlyData, year, capitalTypes])
+  }, [mapData, allYearlyData, year, capitalTypes, sector])
 
   // 초기 로딩
   useEffect(() => {
     if (!isMounted) return
 
     const initializeData = async () => {
+      console.log('🚀 Initializing map data...')
       setLoading(true)
       setInitialLoad(true)
+      setAllYearlyData({}) // 기존 데이터 초기화
 
       try {
         // 1. GeoJSON 로딩
         console.log('📍 Loading GeoJSON...')
         const geoResponse = await fetch('/world-countries-detailed.json')
+        if (!geoResponse.ok) {
+          throw new Error(`Failed to load GeoJSON: ${geoResponse.status}`)
+        }
         const worldData = await geoResponse.json()
         setMapData(worldData)
+        console.log('✅ GeoJSON loaded successfully')
 
         // 2. 모든 연도 데이터 로딩
+        console.log('📊 Loading yearly data...')
         const yearlyData = await loadAllYearData(sector, capitalTypes)
         setAllYearlyData(yearlyData)
+        console.log('✅ Yearly data loaded successfully')
 
       } catch (error) {
-        console.error('Failed to initialize data:', error)
+        console.error('❌ Failed to initialize data:', error)
+        // 에러 발생 시에도 기본 상태로 설정
+        setAllYearlyData({})
       } finally {
         setLoading(false)
         setInitialLoad(false)
@@ -294,13 +348,14 @@ export default function BulkLoadingSectorMap({
     initializeData()
   }, [isMounted, sector, capitalTypes])
 
-  // 데이터 변경 시 (연도는 제외) - 디바운싱 적용
+  // 데이터 변경 시 (연도는 제외) - 최적화된 디바운싱 적용
   useEffect(() => {
     if (initialLoad || !isMounted) return
 
     // 디바운싱을 위한 타이머
     const updateTimer = setTimeout(() => {
       const updateData = async () => {
+        console.log('🔄 Updating data for:', { sector, capitalTypes, year })
         setLoading(true)
         
         // 자본타입이 변경되면 캐시 무효화
@@ -315,21 +370,60 @@ export default function BulkLoadingSectorMap({
           return
         }
         
-        // 현재 연도 데이터만 우선 로드 (빠른 응답)
-        const currentYearData = await fetchYearData(sector, capitalTypes, year)
-        const quickYearlyData = { ...allYearlyData, [year]: currentYearData }
-        setAllYearlyData(quickYearlyData)
-        setLoading(false)
-        
-        // 백그라운드에서 나머지 연도 데이터 로드
-        setTimeout(async () => {
-          const fullYearlyData = await loadAllYearData(sector, capitalTypes)
-          setAllYearlyData(fullYearlyData)
-        }, 100)
+        try {
+          // 현재 연도 데이터만 우선 로드 (빠른 응답)
+          console.log(`🎯 Quick loading current year ${year}...`)
+          const currentYearData = await fetchYearData(sector, capitalTypes, year)
+          console.log('📊 Current year data loaded:', Object.keys(currentYearData).length, 'countries')
+          
+          // 현재 연도 데이터가 있으면 즉시 표시
+          if (Object.keys(currentYearData).length > 0) {
+            const quickYearlyData = { ...allYearlyData, [year]: currentYearData }
+            setAllYearlyData(quickYearlyData)
+            setLoading(false)
+          } else {
+            console.warn('⚠️ No data found for current year, checking other years...')
+            // 최근 5년 데이터 확인
+            const recentYears = Array.from({ length: 5 }, (_, i) => 2024 - i)
+            const recentPromises = recentYears.map(y => fetchYearData(sector, capitalTypes, y))
+            const recentResults = await Promise.allSettled(recentPromises)
+            
+            let foundData = false
+            recentResults.forEach((result, index) => {
+              if (result.status === 'fulfilled' && Object.keys(result.value).length > 0) {
+                const foundYear = recentYears[index]
+                console.log(`✅ Found data for year ${foundYear}`)
+                const quickYearlyData = { ...allYearlyData, [foundYear]: result.value }
+                setAllYearlyData(quickYearlyData)
+                foundData = true
+              }
+            })
+            
+            if (!foundData) {
+              console.warn('⚠️ No data found in recent years')
+            }
+            setLoading(false)
+          }
+          
+          // 백그라운드에서 전체 데이터 로드
+          setTimeout(async () => {
+            try {
+              console.log('🔄 Loading full dataset in background...')
+              const fullYearlyData = await loadAllYearData(sector, capitalTypes)
+              console.log('✅ Full yearly data loaded:', Object.keys(fullYearlyData).length, 'years')
+              setAllYearlyData(fullYearlyData)
+            } catch (error) {
+              console.error('❌ Background loading failed:', error)
+            }
+          }, 200)
+        } catch (error) {
+          console.error('❌ Data update failed:', error)
+          setLoading(false)
+        }
       }
 
       updateData()
-    }, 150) // 150ms 디바운싱
+    }, 300) // 300ms 디바운싱으로 증가
 
     return () => clearTimeout(updateTimer)
   }, [sector, capitalTypes, isMounted, initialLoad, year])

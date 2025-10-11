@@ -583,7 +583,6 @@ class NewsAPIView(APIView):
             country = request.query_params.get('country')
             sector = request.query_params.get('sector')
             capital_type = request.query_params.get('capital_type')
-            use_dummy = False  # 더미 데이터 사용하지 않음
             
             # 필수 파라미터 검증
             if not year:

@@ -6,8 +6,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django.db.models import Sum, Count, Q
+from django.core.cache import cache
 from apps.data.models import RawCapitalData, Country, Sector, CapitalType
 import json
+import hashlib
 
 
 @api_view(['GET'])
@@ -47,10 +49,20 @@ def map_config(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def map_data(request):
-    """Get map data for visualization."""
+    """Get map data for visualization with caching."""
     year = request.GET.get('year', 2024)
     sector = request.GET.get('sector', '')
     capital_types = request.GET.getlist('capital_types')
+    
+    # 캐시 키 생성
+    cache_key = f"map_data_{year}_{sector}_{'_'.join(sorted(capital_types))}"
+    cache_key = hashlib.md5(cache_key.encode()).hexdigest()
+    
+    # 캐시에서 데이터 확인 (5분 캐시)
+    cached_data = cache.get(cache_key)
+    if cached_data:
+        print(f"✅ Cache hit for {cache_key}")
+        return Response(cached_data)
     
     # 분야 코드를 한국어 이름으로 매핑
     sector_mapping = {
@@ -93,7 +105,7 @@ def map_data(request):
                 }
             })
         
-        # 국가별 데이터 집계
+        # 국가별 데이터 집계 (최적화된 쿼리)
         country_data = data_query.values('country__name', 'country__code', 'country__latitude', 'country__longitude').annotate(
             total_amount=Sum('amount_usd'),
             data_count=Count('id'),
@@ -101,35 +113,41 @@ def map_data(request):
             estimated_data_count=Count('id', filter=Q(is_estimated=True))
         ).order_by('-total_amount')
         
-        # 국가별 자본타입 데이터
+        # 자본타입별 데이터를 한 번에 가져오기 (N+1 쿼리 문제 해결)
+        capital_type_data = data_query.values(
+            'country__code', 'capital_type__name', 'capital_type__code'
+        ).annotate(
+            amount=Sum('amount_usd'),
+            count=Count('id')
+        )
+        
+        # 국가별 자본타입 데이터를 딕셔너리로 구성
+        capital_types_by_country = {}
+        for cap_type in capital_type_data:
+            country_code = cap_type['country__code']
+            if country_code not in capital_types_by_country:
+                capital_types_by_country[country_code] = {}
+            
+            capital_types_by_country[country_code][cap_type['capital_type__code']] = {
+                'name': cap_type['capital_type__name'],
+                'amount': float(cap_type['amount'] or 0),
+                'count': cap_type['count']
+            }
+        
+        # 국가별 데이터 구성
         countries = []
         for country in country_data:
-            # 해당 국가의 자본타입별 데이터
-            country_capital_types = data_query.filter(
-                country__code=country['country__code']
-            ).values('capital_type__name', 'capital_type__code').annotate(
-                amount=Sum('amount_usd'),
-                count=Count('id')
-            )
-            
-            capital_types = {}
-            for cap_type in country_capital_types:
-                capital_types[cap_type['capital_type__code']] = {
-                    'name': cap_type['capital_type__name'],
-                    'amount': float(cap_type['amount'] or 0),
-                    'count': cap_type['count']
-                }
-            
+            country_code = country['country__code']
             countries.append({
                 'name': country['country__name'],
-                'code': country['country__code'],
+                'code': country_code,
                 'latitude': float(country['country__latitude'] or 0),
                 'longitude': float(country['country__longitude'] or 0),
                 'total_amount': float(country['total_amount'] or 0),
                 'data_count': country['data_count'],
                 'real_data_count': country['real_data_count'],
                 'estimated_data_count': country['estimated_data_count'],
-                'capital_types': capital_types
+                'capital_types': capital_types_by_country.get(country_code, {})
             })
         
         # 전체 통계
@@ -138,7 +156,7 @@ def map_data(request):
         real_count = sum(country['real_data_count'] for country in countries)
         estimated_count = sum(country['estimated_data_count'] for country in countries)
         
-        return Response({
+        response_data = {
             'success': True,
             'data': {
                 'countries': countries,
@@ -153,7 +171,13 @@ def map_data(request):
                     'capital_types': capital_types
                 }
             }
-        })
+        }
+        
+        # 캐시에 저장 (5분)
+        cache.set(cache_key, response_data, 300)
+        print(f"💾 Cached data for {cache_key}")
+        
+        return Response(response_data)
         
     except Exception as e:
         return Response({

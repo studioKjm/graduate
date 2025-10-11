@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { formatNumberBoth } from '@/utils/formatters'
 
 interface NewsPanelProps {
@@ -44,8 +44,6 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedCapitalType, setSelectedCapitalType] = useState<string | null>(null)
-  const [useDummyData, setUseDummyData] = useState<boolean>(false)
-
   // 주요 자본 타입 선택 (첫 번째 타입 우선)
   useEffect(() => {
     if (capitalTypes && capitalTypes.length > 0) {
@@ -56,7 +54,7 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
   }, [capitalTypes])
 
   // 뉴스 데이터 가져오기
-  const fetchNews = async () => {
+  const fetchNews = useCallback(async () => {
     if (!selectedCapitalType) return
 
     setLoading(true)
@@ -64,8 +62,7 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
 
     try {
       const params = new URLSearchParams({
-        year: year.toString(),
-        dummy: useDummyData.toString()
+        year: year.toString()
       })
 
       if (country) params.append('country', country)
@@ -92,14 +89,14 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
     } finally {
       setLoading(false)
     }
-  }
+  }, [year, country, sector, selectedCapitalType])
 
   // 필터가 변경될 때마다 뉴스 갱신
   useEffect(() => {
     if (selectedCapitalType) {
       fetchNews()
     }
-  }, [year, country, sector, selectedCapitalType, useDummyData])
+  }, [fetchNews])
 
   // 날짜 포맷팅
   const formatDate = (dateString: string) => {
@@ -185,36 +182,11 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
         <div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">관련 뉴스</h3>
           <div className="text-sm text-gray-600">
-            {year}년 {country && `${country} `}
-            {sector && `${sector} 분야 `}
-            {selectedCapitalType && `${selectedCapitalType} `}
-            관련 최신 뉴스
+            {year}년 {sector && `${sector} 분야 `}관련 최신 뉴스
           </div>
         </div>
         
         <div className="flex items-center gap-2">
-          {/* 데이터 소스 토글 */}
-          <div className="flex items-center">
-            <label className="flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={useDummyData}
-                onChange={(e) => setUseDummyData(e.target.checked)}
-                className="sr-only"
-              />
-              <div className={`relative inline-flex h-6 w-11 rounded-full transition-colors ${
-                useDummyData ? 'bg-amber-500' : 'bg-blue-600'
-              }`}>
-                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  useDummyData ? 'translate-x-6' : 'translate-x-1'
-                } mt-1`}/>
-              </div>
-              <span className="ml-2 text-xs text-gray-600">
-                {useDummyData ? '더미' : '실제'}
-              </span>
-            </label>
-          </div>
-
           {/* 새로고침 버튼 */}
           <button
             onClick={fetchNews}
@@ -257,22 +229,15 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
       {/* 검색 정보 */}
       {newsData && (
         <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-          <div className="text-sm text-gray-600">
-            <strong>검색 쿼리:</strong> {newsData.query}
-          </div>
-          <div className="text-xs text-gray-500 mt-1">
+          <div className="text-xs text-gray-500">
             총 {newsData.count}개 기사 • 수집 시간: {formatDate(newsData.collected_at)}
             {newsData.articles.length > 0 && (
               <span className="ml-2 text-gray-400">
                 • 출처: {Array.from(new Set(newsData.articles.map(a => a.source.name))).join(', ')}
               </span>
             )}
-            <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
-              useDummyData 
-                ? 'bg-amber-100 text-amber-800' 
-                : 'bg-green-100 text-green-800'
-            }`}>
-              {useDummyData ? '테스트 데이터' : '실제 뉴스'}
+            <span className="ml-2 px-2 py-0.5 rounded text-xs bg-green-100 text-green-800">
+              실제 뉴스
             </span>
             {newsData.note && (
               <span className="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded text-xs">

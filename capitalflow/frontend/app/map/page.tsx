@@ -8,8 +8,8 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import DataVisualizationPanel from '@/components/charts/DataVisualizationPanel'
 import NewsPanel from '@/components/news/NewsPanel'
 
-// Dynamically import the bulk loading map component for instant year switching
-const MapVisualization = dynamic(() => import('@/components/map/BulkLoadingSectorMap'), {
+// Dynamically import the simple map component for better performance
+const MapVisualization = dynamic(() => import('@/components/map/SimpleMapVisualization'), {
   loading: () => <LoadingSpinner />,
   ssr: false,
 })

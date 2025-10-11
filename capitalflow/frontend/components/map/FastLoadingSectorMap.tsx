@@ -81,9 +81,11 @@ export default function FastLoadingSectorMap({
     }
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 3000) // 3초 타임아웃
+    const timeoutId = setTimeout(() => controller.abort(), 5000) // 5초 타임아웃으로 증가
 
     try {
+      console.log(`🔍 Fetching data for year ${year}, sector: ${sector}, capitalTypes: ${capitalTypes.join(',')}`)
+      
       const params = new URLSearchParams()
       if (sector) params.append('sector', sector)
       params.append('year', year.toString())
@@ -93,7 +95,7 @@ export default function FastLoadingSectorMap({
       params.append('aggregate', 'true')
       
       const url = `http://localhost:8001/api/v1/visualization/map-data/?${params}`
-      console.log(`🔍 Fetching: ${url}`)
+      console.log(`🌐 Fetching from: ${url}`)
       
       const response = await fetch(url, { 
         signal: controller.signal,
@@ -106,22 +108,25 @@ export default function FastLoadingSectorMap({
       clearTimeout(timeoutId)
       
       if (!response.ok) {
-        console.error(`❌ HTTP ${response.status} for year ${year}`)
-        throw new Error(`HTTP ${response.status}`)
+        console.error(`❌ HTTP ${response.status} for year ${year}: ${response.statusText}`)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      console.log(`📊 Year ${year} response:`, data.data?.countries?.length || 0, 'countries')
+      console.log(`📦 Response data for year ${year}:`, data)
       
       const processedData: { [countryCode: string]: number } = {}
       
       if (data.success && data.data && data.data.countries && Array.isArray(data.data.countries)) {
         data.data.countries.forEach((country: any) => {
           if (country.code && country.total_amount !== undefined) {
-            processedData[country.code] = parseFloat(country.total_amount) || 0
+            const amount = parseFloat(country.total_amount) || 0
+            if (amount > 0) {
+              processedData[country.code] = amount
+            }
           }
         })
-        console.log(`✅ Year ${year} processed:`, Object.keys(processedData).length, 'countries')
+        console.log(`✅ Year ${year} processed:`, Object.keys(processedData).length, 'countries with data')
       } else {
         console.warn(`⚠️ Year ${year}: No valid results`)
       }

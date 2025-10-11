@@ -1,256 +1,544 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
-import { scaleSequential } from 'd3-scale'
-import { interpolateBlues } from 'd3-scale-chromatic'
+import React, { useState, useEffect, useMemo } from 'react'
+import { formatNumberBoth } from '@/utils/formatters'
 
 interface SimpleMapVisualizationProps {
   year?: number
   sector?: string
-  capitalType?: string
+  capitalTypes?: string[]
   visualizationType?: 'choropleth' | 'flow' | 'both'
+  onDataChange?: (data: any) => void
+}
+
+interface MapData {
+  [countryCode: string]: number
 }
 
 export default function SimpleMapVisualization({
-  year = 2023,
-  sector,
-  capitalType,
-  visualizationType = 'choropleth'
+  year = 2024,
+  sector = '',
+  capitalTypes = [],
+  visualizationType = 'choropleth',
+  onDataChange
 }: SimpleMapVisualizationProps) {
   const [mapData, setMapData] = useState<any>(null)
+  const [currentData, setCurrentData] = useState<MapData>({})
   const [loading, setLoading] = useState(true)
   const [hoveredCountry, setHoveredCountry] = useState<any>(null)
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [isMounted, setIsMounted] = useState(false)
 
-  // 색상 스케일 생성
-  const colorScale = useMemo(() => {
-    return scaleSequential(interpolateBlues).domain([0, 1])
-  }, [])
+  // 단일 연도 데이터 로딩 (최적화된 버전)
+  const fetchData = async (sector: string, capitalTypes: string[], year: number) => {
+    try {
+      console.log(`🔍 Fetching data for year ${year}, sector: ${sector}, capitalTypes: ${capitalTypes.join(',')}`)
+      
+      // 자본타입이 전체해제된 경우 빈 결과 반환
+      if (capitalTypes.length === 0) {
+        console.log('🚫 No capital types selected, returning empty data')
+        return {}
+      }
 
-  // 지도 데이터 로드
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true)
-      try {
-        const geoResponse = await fetch('/world-countries-detailed.json')
-        const worldData = await geoResponse.json()
-        
-        // 국가별 더미 자본 데이터 (더 다양한 국가 포함)
-        const capitalData = {
-          'USA': { total_capital: 1000000, intensity: 1.0 },
-          'CHN': { total_capital: 800000, intensity: 0.8 },
-          'JPN': { total_capital: 600000, intensity: 0.6 },
-          'DEU': { total_capital: 500000, intensity: 0.5 },
-          'GBR': { total_capital: 450000, intensity: 0.45 },
-          'FRA': { total_capital: 400000, intensity: 0.4 },
-          'KOR': { total_capital: 350000, intensity: 0.35 },
-          'CAN': { total_capital: 300000, intensity: 0.3 },
-          'AUS': { total_capital: 250000, intensity: 0.25 },
-          'IND': { total_capital: 200000, intensity: 0.2 },
-          'BRA': { total_capital: 180000, intensity: 0.18 },
-          'RUS': { total_capital: 150000, intensity: 0.15 },
-          // 추가 국가들
-          'ITA': { total_capital: 120000, intensity: 0.12 },
-          'ESP': { total_capital: 100000, intensity: 0.10 },
-          'NLD': { total_capital: 80000, intensity: 0.08 },
-          'CHE': { total_capital: 70000, intensity: 0.07 },
-          'SGP': { total_capital: 60000, intensity: 0.06 },
-          'SWE': { total_capital: 50000, intensity: 0.05 },
-          'NOR': { total_capital: 45000, intensity: 0.045 },
-          'DNK': { total_capital: 40000, intensity: 0.04 },
-          'MEX': { total_capital: 35000, intensity: 0.035 },
-          'ARG': { total_capital: 30000, intensity: 0.03 },
+      const params = new URLSearchParams()
+      if (sector) params.append('sector', sector)
+      params.append('year', year.toString())
+      if (capitalTypes.length > 0) {
+        capitalTypes.forEach(type => params.append('capital_types', type))
+      }
+      params.append('aggregate', 'true')
+      
+      const url = `http://localhost:8001/api/v1/visualization/map-data/?${params}`
+      console.log(`🌐 Fetching from: ${url}`)
+      
+      const response = await fetch(url, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
         }
-        
-        console.log('Loading world data:', worldData.features?.length, 'countries')
-        
-        // GeoJSON 피처에 자본 데이터 추가
-        const enrichedFeatures = worldData.features.map((feature: any) => {
-          const countryCode = feature.properties.ISO_A3 || feature.properties.ADM0_A3 || feature.properties.iso_a3
-          const countryName = feature.properties.NAME || feature.properties.NAME_EN || feature.properties.name
-          
-          // 더 다양한 기본값 제공
-          const capitalInfo = capitalData[countryCode as keyof typeof capitalData] || {
-            total_capital: Math.random() * 25000 + 5000, // 5K-30K 범위
-            intensity: Math.random() * 0.15 + 0.05 // 0.05-0.2 범위
-          }
-          
-          console.log(`Country: ${countryName} (${countryCode}) - Intensity: ${capitalInfo.intensity}`)
-          
-          return {
-            ...feature,
-            properties: {
-              ...feature.properties,
-              country_code: countryCode,
-              country_name: countryName,
-              total_capital: capitalInfo.total_capital,
-              intensity: capitalInfo.intensity
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      console.log(`📦 Response data:`, data)
+      
+      const processedData: MapData = {}
+      
+      if (data.success && data.data && data.data.countries && Array.isArray(data.data.countries)) {
+        data.data.countries.forEach((country: any) => {
+          if (country.code && country.total_amount !== undefined) {
+            const amount = parseFloat(country.total_amount) || 0
+            if (amount > 0) {
+              processedData[country.code] = amount
             }
           }
         })
+        console.log(`✅ Processed ${Object.keys(processedData).length} countries with data`)
+      } else {
+        console.warn('⚠️ Invalid response structure:', data)
+      }
+      
+      return processedData
+    } catch (error: any) {
+      console.error(`❌ Error loading data:`, error.message)
+      return {}
+    }
+  }
+
+  // 현재 연도의 맵 데이터 생성
+  const currentMapData = useMemo(() => {
+    console.log('🗺️ Generating map data for:', { year, sector, capitalTypes: capitalTypes.length })
+    
+    if (!mapData) {
+      console.log('❌ No map data available')
+      return null
+    }
+
+    // 자본타입이 전체해제된 경우 즉시 빈 데이터 반환
+    if (capitalTypes.length === 0) {
+      console.log('🚫 No capital types selected, showing empty map')
+      return {
+        type: 'FeatureCollection',
+        features: mapData.features.map((feature: any) => ({
+          ...feature,
+          properties: {
+            ...feature.properties,
+            country_name: feature.properties?.NAME || feature.properties?.name || feature.id,
+            country_code: feature.id,
+            capital_amount: 0,
+            intensity: 0,
+            selected_capital_types: '선택 안함',
+            capital_type_count: 0
+          }
+        }))
+      }
+    }
+
+    // 현재 연도 데이터가 없으면 로딩 중 상태로 표시
+    if (Object.keys(currentData).length === 0) {
+      console.log(`⏳ Loading data for year ${year}...`)
+      return {
+        type: 'FeatureCollection',
+        features: mapData.features.map((feature: any) => ({
+          ...feature,
+          properties: {
+            ...feature.properties,
+            country_name: feature.properties?.NAME || feature.properties?.name || feature.id,
+            country_code: feature.id,
+            capital_amount: 0,
+            intensity: 0,
+            selected_capital_types: capitalTypes.join(', '),
+            capital_type_count: capitalTypes.length,
+            loading: true
+          }
+        }))
+      }
+    }
+
+    const capitalValues = Object.values(currentData).filter(val => val > 0)
+    console.log(`💰 Capital values:`, capitalValues.length, 'non-zero values')
+    
+    if (capitalValues.length === 0) {
+      console.log('⚠️ No capital values found, showing empty map')
+      return {
+        type: 'FeatureCollection',
+        features: mapData.features.map((feature: any) => ({
+          ...feature,
+          properties: {
+            ...feature.properties,
+            country_name: feature.properties?.NAME || feature.properties?.name || feature.id,
+            country_code: feature.id,
+            capital_amount: 0,
+            intensity: 0,
+            selected_capital_types: capitalTypes.join(', '),
+            capital_type_count: capitalTypes.length
+          }
+        }))
+      }
+    }
+
+    // 더 드라마틱한 색상 분포를 위한 로그 스케일 적용
+    const maxCapital = Math.max(...capitalValues)
+    const minCapital = Math.min(...capitalValues)
+    
+    console.log(`📈 Capital range: ${minCapital.toLocaleString()} - ${maxCapital.toLocaleString()}`)
+    
+    // 로그 스케일로 변환하여 더 극적인 색상 변화 생성
+    const logMax = Math.log10(maxCapital + 1)
+    const logMin = Math.log10(minCapital + 1)
+    const logRange = logMax - logMin
+
+    const enrichedFeatures = mapData.features.map((feature: any) => {
+      const countryCode = feature.id
+      const countryName = feature.properties?.NAME || feature.properties?.name || countryCode
+      const capitalAmount = currentData[countryCode] || 0
+      
+      let intensity = 0
+      if (capitalAmount > 0 && logRange > 0) {
+        const logValue = Math.log10(capitalAmount + 1)
+        intensity = Math.min((logValue - logMin) / logRange, 1)
         
-        setMapData({
-          type: 'FeatureCollection',
-          features: enrichedFeatures
-        })
+        // 더 극적인 색상 변화를 위해 강도 조정
+        intensity = Math.pow(intensity, 0.7) // 제곱근을 적용하여 더 극적인 변화
+      }
+      
+      return {
+        ...feature,
+        properties: {
+          ...feature.properties,
+          country_name: countryName,
+          country_code: countryCode,
+          capital_amount: capitalAmount,
+          intensity: intensity,
+          selected_capital_types: capitalTypes.length > 0 ? capitalTypes.join(', ') : '전체',
+          capital_type_count: capitalTypes.length || 1
+        }
+      }
+    })
+
+    console.log('✅ Map data generated successfully')
+    return {
+      type: 'FeatureCollection',
+      features: enrichedFeatures
+    }
+  }, [mapData, currentData, year, capitalTypes, sector])
+
+  // 초기 로딩
+  useEffect(() => {
+    if (!isMounted) return
+
+    const initializeData = async () => {
+      console.log('🚀 Initializing simple map data...')
+      setLoading(true)
+
+      try {
+        // 1. GeoJSON 로딩
+        console.log('📍 Loading GeoJSON...')
+        const geoResponse = await fetch('/world-countries-detailed.json')
+        if (!geoResponse.ok) {
+          throw new Error(`Failed to load GeoJSON: ${geoResponse.status}`)
+        }
+        const worldData = await geoResponse.json()
+        setMapData(worldData)
+        console.log('✅ GeoJSON loaded successfully')
+
+        // 2. 현재 연도 데이터 로딩
+        console.log('📊 Loading current year data...')
+        const yearData = await fetchData(sector, capitalTypes, year)
+        setCurrentData(yearData)
+        console.log('✅ Current year data loaded successfully')
+
       } catch (error) {
-        console.error('Failed to load map data:', error)
+        console.error('❌ Failed to initialize data:', error)
+        setCurrentData({})
       } finally {
         setLoading(false)
       }
     }
 
-    loadData()
-  }, [year, sector, capitalType])
+    initializeData()
+  }, [isMounted, sector, capitalTypes, year])
 
-  // SVG 경로 문자열 생성
-  const getPathFromGeometry = (geometry: any) => {
-    if (!geometry || !geometry.coordinates) return ''
-    
-    const coordsToPath = (coords: number[][]): string => {
-      return coords.map((coord, index) => {
-        const [lng, lat] = coord
-        // 간단한 등장 원형 투영 (실제 프로젝트에서는 더 정확한 투영 사용)
-        const x = (lng + 180) * (800 / 360)
-        const y = (90 - lat) * (400 / 180)
-        return `${index === 0 ? 'M' : 'L'} ${x} ${y}`
-      }).join(' ') + ' Z'
-    }
-    
-    try {
-      if (geometry.type === 'Polygon') {
-        return coordsToPath(geometry.coordinates[0])
-      } else if (geometry.type === 'MultiPolygon') {
-        return geometry.coordinates
-          .map((polygon: number[][][]) => coordsToPath(polygon[0]))
-          .join(' ')
+  // 데이터 변경 시 (디바운싱 적용)
+  useEffect(() => {
+    if (!isMounted) return
+
+    const updateTimer = setTimeout(async () => {
+      console.log('🔄 Updating data for:', { sector, capitalTypes, year })
+      setLoading(true)
+      
+      try {
+        const yearData = await fetchData(sector, capitalTypes, year)
+        setCurrentData(yearData)
+        console.log('✅ Data updated successfully')
+      } catch (error) {
+        console.error('❌ Data update failed:', error)
+        setCurrentData({})
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Error converting geometry to path:', error)
-    }
-    
-    return ''
+    }, 200) // 200ms 디바운싱
+
+    return () => clearTimeout(updateTimer)
+  }, [sector, capitalTypes, year, isMounted])
+
+  // 클라이언트 마운트
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  // 현재 연도 데이터를 상위 컴포넌트로 전달
+  useEffect(() => {
+    if (Object.keys(currentData).length === 0 || !onDataChange) return
+
+    const formattedData: any = {}
+    Object.entries(currentData).forEach(([countryCode, amount]) => {
+      if (amount > 0) {
+        formattedData[countryCode] = {
+          countryName: countryCode,
+          amount: amount,
+          intensity: amount / Math.max(...Object.values(currentData), 1)
+        }
+      }
+    })
+
+    onDataChange(formattedData)
+  }, [currentData, onDataChange])
+
+  // 색상 정의
+  const sectorColors = {
+    '': { name: '전체', baseColor: [59, 130, 246] },
+    'AI': { name: '인공지능', baseColor: [59, 130, 246] },
+    'SEMICONDUCTOR': { name: '반도체', baseColor: [168, 85, 247] },
+    'BIO': { name: '바이오', baseColor: [34, 197, 94] },
+    'ENERGY': { name: '에너지', baseColor: [234, 179, 8] },
+    'FINTECH': { name: '핀테크', baseColor: [239, 68, 68] },
+    'AUTOMOTIVE': { name: '자동차', baseColor: [20, 184, 166] },
+    'AEROSPACE': { name: '항공우주', baseColor: [99, 102, 241] },
+    'TELECOM': { name: '통신', baseColor: [236, 72, 153] },
+    'REALESTATE': { name: '부동산', baseColor: [139, 69, 19] },
+    'AGRICULTURE': { name: '농업', baseColor: [34, 139, 34] }
   }
 
-  // 색상 계산 - 더 명확한 색상 차이
-  const getFillColor = (intensity: number) => {
-    if (intensity === 0) {
-      return '#f1f5f9' // 기본 회색 (데이터 없음)
+  const getFillColor = (intensity: number, sector: string) => {
+    if (intensity === 0) return '#f8fafc' // 더 밝은 회색
+
+    // 더 드라마틱한 색상 범위 적용
+    if (sector === 'BIO') {
+      if (intensity >= 0.9) return '#064e3b' // 매우 어두운 녹색
+      if (intensity >= 0.7) return '#065f46' // 어두운 녹색
+      if (intensity >= 0.5) return '#047857' // 중간 어두운 녹색
+      if (intensity >= 0.3) return '#059669' // 중간 녹색
+      if (intensity >= 0.1) return '#10b981' // 밝은 녹색
+      return '#6ee7b7' // 매우 밝은 녹색
+    } else if (sector === 'AI') {
+      if (intensity >= 0.9) return '#1e1b4b' // 매우 어두운 보라색
+      if (intensity >= 0.7) return '#312e81' // 어두운 보라색
+      if (intensity >= 0.5) return '#4338ca' // 중간 어두운 보라색
+      if (intensity >= 0.3) return '#6366f1' // 중간 보라색
+      if (intensity >= 0.1) return '#8b5cf6' // 밝은 보라색
+      return '#c4b5fd' // 매우 밝은 보라색
+    } else if (sector === 'SEMICONDUCTOR') {
+      if (intensity >= 0.9) return '#7c2d12' // 매우 어두운 주황색
+      if (intensity >= 0.7) return '#c2410c' // 어두운 주황색
+      if (intensity >= 0.5) return '#ea580c' // 중간 어두운 주황색
+      if (intensity >= 0.3) return '#f97316' // 중간 주황색
+      if (intensity >= 0.1) return '#fb923c' // 밝은 주황색
+      return '#fed7aa' // 매우 밝은 주황색
+    } else if (sector === 'ENERGY') {
+      if (intensity >= 0.9) return '#92400e' // 매우 어두운 노란색
+      if (intensity >= 0.7) return '#d97706' // 어두운 노란색
+      if (intensity >= 0.5) return '#f59e0b' // 중간 어두운 노란색
+      if (intensity >= 0.3) return '#fbbf24' // 중간 노란색
+      if (intensity >= 0.1) return '#fcd34d' // 밝은 노란색
+      return '#fef3c7' // 매우 밝은 노란색
+    } else if (sector === 'FINTECH') {
+      if (intensity >= 0.9) return '#991b1b' // 매우 어두운 빨간색
+      if (intensity >= 0.7) return '#dc2626' // 어두운 빨간색
+      if (intensity >= 0.5) return '#ef4444' // 중간 어두운 빨간색
+      if (intensity >= 0.3) return '#f87171' // 중간 빨간색
+      if (intensity >= 0.1) return '#fca5a5' // 밝은 빨간색
+      return '#fecaca' // 매우 밝은 빨간색
+    } else if (sector === 'AUTOMOTIVE') {
+      if (intensity >= 0.9) return '#0f766e' // 매우 어두운 청록색
+      if (intensity >= 0.7) return '#0d9488' // 어두운 청록색
+      if (intensity >= 0.5) return '#14b8a6' // 중간 어두운 청록색
+      if (intensity >= 0.3) return '#2dd4bf' // 중간 청록색
+      if (intensity >= 0.1) return '#5eead4' // 밝은 청록색
+      return '#a7f3d0' // 매우 밝은 청록색
+    } else if (sector === 'AEROSPACE') {
+      if (intensity >= 0.9) return '#581c87' // 매우 어두운 보라색
+      if (intensity >= 0.7) return '#7c3aed' // 어두운 보라색
+      if (intensity >= 0.5) return '#8b5cf6' // 중간 어두운 보라색
+      if (intensity >= 0.3) return '#a78bfa' // 중간 보라색
+      if (intensity >= 0.1) return '#c4b5fd' // 밝은 보라색
+      return '#e0e7ff' // 매우 밝은 보라색
+    } else if (sector === 'TELECOM') {
+      if (intensity >= 0.9) return '#be185d' // 매우 어두운 핑크색
+      if (intensity >= 0.7) return '#e11d48' // 어두운 핑크색
+      if (intensity >= 0.5) return '#f43f5e' // 중간 어두운 핑크색
+      if (intensity >= 0.3) return '#fb7185' // 중간 핑크색
+      if (intensity >= 0.1) return '#fda4af' // 밝은 핑크색
+      return '#fecdd3' // 매우 밝은 핑크색
+    } else if (sector === 'REALESTATE') {
+      if (intensity >= 0.9) return '#78350f' // 매우 어두운 갈색
+      if (intensity >= 0.7) return '#a16207' // 어두운 갈색
+      if (intensity >= 0.5) return '#ca8a04' // 중간 어두운 갈색
+      if (intensity >= 0.3) return '#eab308' // 중간 갈색
+      if (intensity >= 0.1) return '#facc15' // 밝은 갈색
+      return '#fef08a' // 매우 밝은 갈색
+    } else if (sector === 'AGRICULTURE') {
+      if (intensity >= 0.9) return '#365314' // 매우 어두운 녹색
+      if (intensity >= 0.7) return '#4d7c0f' // 어두운 녹색
+      if (intensity >= 0.5) return '#65a30d' // 중간 어두운 녹색
+      if (intensity >= 0.3) return '#84cc16' // 중간 녹색
+      if (intensity >= 0.1) return '#a3e635' // 밝은 녹색
+      return '#d9f99d' // 매우 밝은 녹색
     }
     
-    // 파란색 계열로 강도에 따른 색상 매핑
-    if (intensity >= 0.8) return '#1e40af' // 진한 파랑 (매우 높음)
-    if (intensity >= 0.6) return '#3b82f6' // 파랑 (높음)
-    if (intensity >= 0.4) return '#60a5fa' // 중간 파랑 (보통)
-    if (intensity >= 0.2) return '#93c5fd' // 연한 파랑 (낮음)
-    if (intensity >= 0.1) return '#dbeafe' // 매우 연한 파랑 (매우 낮음)
-    return '#f8fafc' // 거의 흰색 (최소)
+    // 기본 색상 (전체 분야)
+    if (intensity >= 0.9) return '#1e3a8a' // 매우 어두운 파란색
+    if (intensity >= 0.7) return '#1e40af' // 어두운 파란색
+    if (intensity >= 0.5) return '#2563eb' // 중간 어두운 파란색
+    if (intensity >= 0.3) return '#3b82f6' // 중간 파란색
+    if (intensity >= 0.1) return '#60a5fa' // 밝은 파란색
+    return '#93c5fd' // 매우 밝은 파란색
   }
 
-  const handleMouseMove = (event: React.MouseEvent) => {
-    setMousePosition({ x: event.clientX, y: event.clientY })
+  if (!isMounted) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-50">
+        <div className="text-gray-600">지도 초기화 중...</div>
+      </div>
+    )
   }
 
   if (loading) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100">
-        <div className="text-center">
-          <div className="loading-spinner mx-auto mb-4"></div>
-          <p className="text-gray-600">지도 데이터를 불러오는 중...</p>
-        </div>
+      <div className="w-full h-full flex items-center justify-center bg-gray-50">
+        <div className="text-gray-600">데이터 로딩 중...</div>
+      </div>
+    )
+  }
+
+  if (!currentMapData) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-gray-50">
+        <div className="text-red-600">지도 데이터를 불러올 수 없습니다.</div>
       </div>
     )
   }
 
   return (
-    <div className="w-full h-full relative bg-blue-50" onMouseMove={handleMouseMove}>
-      <svg 
-        width="100%" 
-        height="100%" 
-        viewBox="0 0 800 400"
-        className="w-full h-full"
+    <div className="w-full h-full relative bg-blue-50">
+      {/* SVG 지도 */}
+      <svg
+        width="100%"
+        height="100%"
+        viewBox="0 0 1000 500"
+        style={{ background: '#e0f2fe' }}
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect()
+          setMousePosition({
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+          })
+        }}
       >
-        {/* 배경 */}
-        <rect width="800" height="400" fill="#f0f9ff" />
-        
-        {/* 국가들 */}
-        {mapData?.features?.map((feature: any, index: number) => {
-          const path = getPathFromGeometry(feature.geometry)
+        {currentMapData.features.map((feature: any, index: number) => {
+          const geometry = feature.geometry
           const intensity = feature.properties.intensity || 0
-          const fillColor = getFillColor(intensity)
-          const countryName = feature.properties.country_name || feature.properties.NAME || 'Unknown'
+          const fillColor = getFillColor(intensity, sector)
           
-          // 색상 적용 확인을 위한 로그 (처음 10개 국가만)
-          if (index < 10) {
-            console.log(`Rendering ${countryName}: intensity=${intensity}, color=${fillColor}`)
+          if (geometry.type === 'Polygon') {
+            const coordinates = geometry.coordinates[0]
+            const pathData = coordinates.map((coord: number[], i: number) => {
+              const x = ((coord[0] + 180) / 360) * 1000
+              const y = ((90 - coord[1]) / 180) * 500
+              return `${i === 0 ? 'M' : 'L'} ${x} ${y}`
+            }).join(' ') + ' Z'
+            
+            return (
+              <path
+                key={`${feature.id}-${index}`}
+                d={pathData}
+                fill={fillColor}
+                stroke="#ffffff"
+                strokeWidth="0.5"
+                style={{ 
+                  cursor: 'pointer',
+                  transition: 'all 0.1s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.setAttribute('stroke', '#2563eb')
+                  e.currentTarget.setAttribute('stroke-width', '2')
+                  setHoveredCountry(feature.properties)
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.setAttribute('stroke', '#ffffff')
+                  e.currentTarget.setAttribute('stroke-width', '0.5')
+                  setHoveredCountry(null)
+                }}
+              />
+            )
+          } else if (geometry.type === 'MultiPolygon') {
+            return geometry.coordinates.map((polygon: number[][][], polyIndex: number) => {
+              const coordinates = polygon[0]
+              const pathData = coordinates.map((coord: number[], i: number) => {
+                const x = ((coord[0] + 180) / 360) * 1000
+                const y = ((90 - coord[1]) / 180) * 500
+                return `${i === 0 ? 'M' : 'L'} ${x} ${y}`
+              }).join(' ') + ' Z'
+              
+              return (
+                <path
+                  key={`${feature.id}-${index}-${polyIndex}`}
+                  d={pathData}
+                  fill={fillColor}
+                  stroke="#ffffff"
+                  strokeWidth="0.5"
+                  style={{ 
+                    cursor: 'pointer',
+                    transition: 'all 0.1s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.setAttribute('stroke', '#2563eb')
+                    e.currentTarget.setAttribute('stroke-width', '2')
+                    setHoveredCountry(feature.properties)
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.setAttribute('stroke', '#ffffff')
+                    e.currentTarget.setAttribute('stroke-width', '0.5')
+                    setHoveredCountry(null)
+                  }}
+                />
+              )
+            })
           }
-          
-          return (
-            <path
-              key={`${feature.properties.country_code || index}-${index}`}
-              d={path}
-              fill={fillColor}
-              stroke="#ffffff"
-              strokeWidth="0.8"
-              className="cursor-pointer hover:stroke-2 transition-all duration-200"
-              onMouseEnter={() => setHoveredCountry(feature.properties)}
-              onMouseLeave={() => setHoveredCountry(null)}
-            />
-          )
+          return null
         })}
-        
-        {/* 흐름 표시 (Flow 모드일 때) */}
-        {(visualizationType === 'flow' || visualizationType === 'both') && (
-          <g>
-            {/* 서울 -> 뉴욕 */}
-            <line x1="570" y1="180" x2="250" y2="160" stroke="#f59e0b" strokeWidth="3" opacity="0.7" />
-            <circle cx="250" cy="160" r="3" fill="#f59e0b" />
-            
-            {/* 런던 -> 도쿄 */}
-            <line x1="400" y1="150" x2="720" y2="170" stroke="#ef4444" strokeWidth="2" opacity="0.7" />
-            <circle cx="720" cy="170" r="2" fill="#ef4444" />
-            
-            {/* 샌프란시스코 -> 베이징 */}
-            <line x1="150" y1="170" x2="550" y2="160" stroke="#8b5cf6" strokeWidth="4" opacity="0.7" />
-            <circle cx="550" cy="160" r="4" fill="#8b5cf6" />
-          </g>
-        )}
       </svg>
-      
+
       {/* 툴팁 */}
       {hoveredCountry && (
-        <div 
-          className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg p-3 pointer-events-none max-w-xs"
+        <div
+          className="absolute pointer-events-none bg-white p-3 rounded-lg shadow-lg border z-30 max-w-xs"
           style={{
             left: mousePosition.x + 10,
-            top: mousePosition.y - 60,
-            transform: mousePosition.x > 600 ? 'translateX(-100%)' : 'none'
+            top: mousePosition.y - 10,
+            transform: mousePosition.x > 500 ? 'translateX(-100%)' : 'none'
           }}
         >
-          <h3 className="font-semibold text-gray-900">
-            {hoveredCountry.country_name || hoveredCountry.NAME}
-          </h3>
-          <p className="text-sm text-gray-600">
-            국가 코드: {hoveredCountry.country_code || hoveredCountry.ISO_A3}
-          </p>
-          <p className="text-sm text-gray-600">
-            총 자본: ${(hoveredCountry.total_capital || 0).toLocaleString()}M
-          </p>
-          <p className="text-sm text-gray-600">
-            강도: {((hoveredCountry.intensity || 0) * 100).toFixed(1)}%
-          </p>
+          <div className="font-bold text-gray-900 mb-1">
+            {hoveredCountry.country_name}
+          </div>
+          <div className="text-sm text-gray-600 space-y-1">
+            <div>
+              <span className="font-medium">총 자본:</span>{' '}
+              <span className="font-bold text-blue-600">
+                {formatNumberBoth(hoveredCountry.capital_amount || 0).short}
+              </span>
+              <div className="text-xs text-gray-500 mt-1">
+                {formatNumberBoth(hoveredCountry.capital_amount || 0).detailed}
+              </div>
+            </div>
+            <div>
+              <span className="font-medium">선택된 타입:</span>{' '}
+              {hoveredCountry.selected_capital_types}
+            </div>
+            <div>
+              <span className="font-medium">연도:</span> {year}
+            </div>
+            <div>
+              <span className="font-medium">분야:</span>{' '}
+              {sectorColors[sector as keyof typeof sectorColors]?.name || sector || '전체'}
+            </div>
+          </div>
         </div>
       )}
-      
-      {/* 제목 */}
-      <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white bg-opacity-90 rounded-lg px-4 py-2">
-        <h2 className="text-lg font-semibold text-gray-900">
-          글로벌 자본 흐름 시각화 ({year}년)
-        </h2>
-        {sector && (
-          <p className="text-sm text-gray-600">분야: {sector}</p>
-        )}
-      </div>
     </div>
   )
 }

@@ -44,6 +44,10 @@ const nextConfig = {
       maxInactiveAge: 25 * 1000,
       pagesBufferLength: 2,
     },
+    // 개발 모드에서 정적 파일 캐시 비활성화
+    generateBuildId: async () => {
+      return 'development-' + Date.now()
+    },
   }),
 }
 
