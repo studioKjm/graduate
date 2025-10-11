@@ -8,8 +8,8 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import DataVisualizationPanel from '@/components/charts/DataVisualizationPanel'
 import NewsPanel from '@/components/news/NewsPanel'
 
-// Dynamically import the simple map component for better performance
-const MapVisualization = dynamic(() => import('@/components/map/SimpleMapVisualization'), {
+// Dynamically import the no loading year map component for instant year switching
+const MapVisualization = dynamic(() => import('@/components/map/NoLoadingYearMap'), {
   loading: () => <LoadingSpinner />,
   ssr: false,
 })
@@ -21,7 +21,7 @@ export default function MapPage() {
   ]
   
   const [mapFilters, setMapFilters] = useState({
-    year: 2020,
+    year: 1995,
     sector: '',
     capitalTypes: allCapitalTypes,
     visualizationType: 'choropleth' as 'choropleth' | 'flow' | 'both'
@@ -29,7 +29,7 @@ export default function MapPage() {
   const [isAnimating, setIsAnimating] = useState(false)
   const [mapData, setMapData] = useState<any>({}) // 지도 데이터 상태 추가
   const [animationInterval, setAnimationInterval] = useState<NodeJS.Timeout | null>(null)
-  const [animationSpeed, setAnimationSpeed] = useState(1000) // 애니메이션 속도 (밀리초)
+  const [animationSpeed, setAnimationSpeed] = useState(500) // 애니메이션 속도 (밀리초) - 더 빠르게
 
   const handleFiltersChange = (newFilters: Partial<typeof mapFilters>) => {
     setMapFilters(prev => ({ ...prev, ...newFilters }))
@@ -43,9 +43,9 @@ export default function MapPage() {
       const interval = setInterval(() => {
         setMapFilters(prev => {
           const nextYear = prev.year + 1
-          // 연도 범위 체크 (2010-2024)
+          // 연도 범위 체크 (1995-2024)
           if (nextYear > 2024) {
-            return { ...prev, year: 2010 } // 처음으로 돌아가기
+            return { ...prev, year: 1995 } // 처음으로 돌아가기
           }
           return { ...prev, year: nextYear }
         })
@@ -74,7 +74,7 @@ export default function MapPage() {
         setMapFilters(prev => {
           const nextYear = prev.year + 1
           if (nextYear > 2024) {
-            return { ...prev, year: 2010 }
+            return { ...prev, year: 1995 }
           }
           return { ...prev, year: nextYear }
         })

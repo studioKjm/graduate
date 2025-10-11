@@ -65,14 +65,14 @@ export default function MapControls({
   // 모든 자본 타입의 id를 디폴트로 설정
   const allCapitalTypeIds = capitalTypes.map(type => type.id)
   
-  const [currentYear, setCurrentYear] = useState(2023)
-  const [yearRangeMin, setYearRangeMin] = useState(1990) // 디폴트 최소값 1990
+  const [currentYear, setCurrentYear] = useState(1995)
+  const [yearRangeMin, setYearRangeMin] = useState(1995) // 디폴트 최소값 1995
   const [yearRangeMax, setYearRangeMax] = useState(2024) // 디폴트 최대값 2024
   const [selectedSector, setSelectedSector] = useState('')
   const [selectedCapitalTypes, setSelectedCapitalTypes] = useState<string[]>(allCapitalTypeIds)
   const [visualizationType, setVisualizationType] = useState<'choropleth' | 'flow' | 'both'>('choropleth')
   const [isAnimating, setIsAnimating] = useState(false)
-  const [animationSpeed, setAnimationSpeed] = useState(1000) // 밀리초 단위 (1초)
+  const [animationSpeed, setAnimationSpeed] = useState(500) // 밀리초 단위 (0.5초) - 더 빠르게
   const [isExpanded, setIsExpanded] = useState(true)
   const [isSelectedTypesExpanded, setIsSelectedTypesExpanded] = useState(false) // 디폴트로 접어둠
   const [showSpeedControls, setShowSpeedControls] = useState(false) // 속도 조절 패널 표시 여부
@@ -205,7 +205,7 @@ export default function MapControls({
                   <label className="text-xs text-gray-500">시작년도</label>
                   <input
                     type="number"
-                    min="1970"
+                    min="1995"
                     max="2024"
                     value={yearRangeMin}
                     onChange={(e) => {
@@ -221,7 +221,7 @@ export default function MapControls({
                   <label className="text-xs text-gray-500">종료년도</label>
                   <input
                     type="number"
-                    min="1970"
+                    min="1995"
                     max="2024"
                     value={yearRangeMax}
                     onChange={(e) => {
@@ -238,10 +238,10 @@ export default function MapControls({
               {/* 범위 프리셋 버튼 */}
               <div className="flex gap-1 mt-2">
                 <button
-                  onClick={() => handleYearRangeChange(1990, 2024)}
+                  onClick={() => handleYearRangeChange(1995, 2024)}
                   className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
                 >
-                  1990-2024
+                  1995-2024
                 </button>
                 <button
                   onClick={() => handleYearRangeChange(2000, 2024)}
@@ -336,6 +336,14 @@ export default function MapControls({
                 {/* 빠른 속도 조절 버튼들 */}
                 <div className="flex gap-1 mb-3">
                   <button
+                    onClick={() => handleAnimationSpeedChange(200)}
+                    className={`px-2 py-1 text-xs rounded ${
+                      animationSpeed === 200 ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                    }`}
+                  >
+                    초고속
+                  </button>
+                  <button
                     onClick={() => handleAnimationSpeedChange(500)}
                     className={`px-2 py-1 text-xs rounded ${
                       animationSpeed === 500 ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
@@ -359,14 +367,6 @@ export default function MapControls({
                   >
                     느림
                   </button>
-                  <button
-                    onClick={() => handleAnimationSpeedChange(3000)}
-                    className={`px-2 py-1 text-xs rounded ${
-                      animationSpeed === 3000 ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                    }`}
-                  >
-                    매우 느림
-                  </button>
                 </div>
                 
                 {/* 세밀한 속도 조절 슬라이더 */}
@@ -375,14 +375,14 @@ export default function MapControls({
                     <ChevronLeftIcon className="h-3 w-3 text-gray-400" />
                     <input
                       type="range"
-                      min="500"
-                      max="3000"
-                      step="250"
+                      min="200"
+                      max="2000"
+                      step="50"
                       value={animationSpeed}
                       onChange={(e) => handleAnimationSpeedChange(parseInt(e.target.value))}
                       className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
                       style={{
-                        background: `linear-gradient(to right, #10b981 0%, #10b981 ${((animationSpeed - 500) / (3000 - 500)) * 100}%, #e5e7eb ${((animationSpeed - 500) / (3000 - 500)) * 100}%, #e5e7eb 100%)`
+                        background: `linear-gradient(to right, #10b981 0%, #10b981 ${((animationSpeed - 200) / (2000 - 200)) * 100}%, #e5e7eb ${((animationSpeed - 200) / (2000 - 200)) * 100}%, #e5e7eb 100%)`
                       }}
                     />
                     <ChevronRightIcon className="h-3 w-3 text-gray-400" />
