@@ -261,3 +261,44 @@ class DataProcessingLog(models.Model):
     
     def __str__(self):
         return f"{self.get_processing_type_display()} - {self.get_status_display()} ({self.start_time})"
+
+
+class NewsData(models.Model):
+    """뉴스 데이터 모델"""
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    year = models.PositiveIntegerField(verbose_name='연도')
+    country = models.CharField(max_length=10, blank=True, null=True, verbose_name='국가 코드')
+    sector = models.CharField(max_length=50, blank=True, null=True, verbose_name='분야')
+    capital_type = models.CharField(max_length=20, blank=True, null=True, verbose_name='자본 타입')
+    
+    # 뉴스 정보
+    title = models.TextField(verbose_name='제목')
+    description = models.TextField(blank=True, verbose_name='설명')
+    url = models.URLField(verbose_name='URL')
+    source = models.CharField(max_length=100, verbose_name='출처')
+    published_at = models.DateTimeField(verbose_name='발행일시')
+    image_url = models.URLField(blank=True, null=True, verbose_name='이미지 URL')
+    relevance_score = models.FloatField(
+        default=0.5,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+        verbose_name='관련도 점수'
+    )
+    
+    # 메타데이터
+    search_query = models.CharField(max_length=200, verbose_name='검색 쿼리')
+    collected_at = models.DateTimeField(auto_now_add=True, verbose_name='수집일시')
+    is_active = models.BooleanField(default=True, verbose_name='활성 여부')
+    
+    class Meta:
+        db_table = 'news_data'
+        verbose_name = '뉴스 데이터'
+        verbose_name_plural = '뉴스 데이터'
+        indexes = [
+            models.Index(fields=['year', 'sector', 'capital_type']),
+            models.Index(fields=['year', 'country']),
+            models.Index(fields=['collected_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.title[:50]}... ({self.year}, {self.sector})"

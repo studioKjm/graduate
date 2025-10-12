@@ -71,7 +71,7 @@ export default function Footer() {
             &copy; 2025 CapitalFlow. All rights reserved.
           </p>
           <p className="mt-2 text-center text-xs text-gray-400 md:text-left">
-            데이터 출처: World Bank, IMF, OECD
+            데이터 출처: World Bank, IMF, FRED, SEC, Alpha Vantage, Yahoo Finance, GlobalSWF, 데이터 추정
           </p>
         </div>
       </div>

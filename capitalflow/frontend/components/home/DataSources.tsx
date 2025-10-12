@@ -1,27 +1,51 @@
 const dataSources = [
   {
     name: 'World Bank',
-    description: '국제 직접투자(FDI) 및 다자간 투자 데이터',
+    description: 'FDI, FPI 데이터 - 국제 직접투자 및 포트폴리오 투자 통계',
     logo: '🏦',
     url: 'https://www.worldbank.org/',
   },
   {
     name: 'IMF',
-    description: '국제수지 및 자본계정 통계',
+    description: '국제수지 및 자본계정 통계 - 공식 금융 데이터',
     logo: '💰',
     url: 'https://www.imf.org/',
   },
   {
-    name: 'OECD',
-    description: 'OECD 국가 간 투자 통계 및 분야별 데이터',
-    logo: '📊',
-    url: 'https://www.oecd.org/',
+    name: 'FRED (Fed)',
+    description: '미국 연준 경제 데이터 - BONDS, FPI, VC, PE, IPO 데이터',
+    logo: '🏛️',
+    url: 'https://fred.stlouisfed.org/',
   },
   {
-    name: 'UN',
-    description: '국제연합 글로벌 투자 동향 보고서',
-    logo: '🌐',
-    url: 'https://unctad.org/',
+    name: 'SEC EDGAR',
+    description: '미국 증권거래위원회 - MA, IPO, VC 기업 공시 데이터',
+    logo: '📈',
+    url: 'https://www.sec.gov/edgar',
+  },
+  {
+    name: 'Alpha Vantage',
+    description: '금융 시장 데이터 - FPI, VC, PE, IPO, BONDS 실시간 데이터',
+    logo: '⚡',
+    url: 'https://www.alphavantage.co/',
+  },
+  {
+    name: 'Yahoo Finance',
+    description: '주식 시장 데이터 - FPI, VC, PE, IPO 투자 데이터',
+    logo: '📊',
+    url: 'https://finance.yahoo.com/',
+  },
+  {
+    name: 'GlobalSWF',
+    description: '국부펀드 투자 데이터 - SWF 투자 현황 및 동향',
+    logo: '🏛️',
+    url: 'https://globalswf.com/',
+  },
+  {
+    name: '데이터 추정',
+    description: '유사 국가/분야 기반 추정, GDP 기반 추정 - 누락 데이터 보완',
+    logo: '📊',
+    url: '#',
   },
 ]
 
@@ -34,7 +58,8 @@ export default function DataSources() {
             신뢰할 수 있는 데이터 출처
           </h2>
           <p className="mt-4 text-xl text-gray-600">
-            국제기구의 공식 데이터를 기반으로 정확하고 신뢰성 있는 분석을 제공합니다.
+            World Bank, IMF, FRED, SEC 등 공식 기관 데이터와 다양한 추정 방법을 통해 
+            완전한 글로벌 자본 흐름 지도를 제공합니다.
           </p>
         </div>
 

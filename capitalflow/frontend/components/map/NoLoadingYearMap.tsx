@@ -139,7 +139,10 @@ export default function NoLoadingYearMap({
       year2008Exists: !!allYearlyData[2008],
       year2008Data: allYearlyData[2008] ? Object.keys(allYearlyData[2008]).length : 0,
       year2010Exists: !!allYearlyData[2010],
-      year2010Data: allYearlyData[2010] ? Object.keys(allYearlyData[2010]).length : 0
+      year2010Data: allYearlyData[2010] ? Object.keys(allYearlyData[2010]).length : 0,
+      currentYearDataType: typeof currentYearData,
+      currentYearDataIsArray: Array.isArray(currentYearData),
+      currentYearDataIsObject: currentYearData && typeof currentYearData === 'object'
     })
     
     // 현재 연도 데이터가 없으면 빈 데이터로 표시 (로딩 없음)
@@ -162,8 +165,13 @@ export default function NoLoadingYearMap({
       }
     }
 
-    const capitalValues = Object.values(currentYearData).filter(val => val > 0)
-    console.log(`💰 Capital values for year ${year}:`, capitalValues.length, 'non-zero values')
+    // 안전한 데이터 처리
+    const capitalValues = currentYearData ? Object.values(currentYearData).filter(val => val > 0) : []
+    console.log(`💰 Capital values for year ${year}:`, capitalValues.length, 'non-zero values', {
+      hasCurrentYearData: !!currentYearData,
+      currentYearDataKeys: currentYearData ? Object.keys(currentYearData) : [],
+      sampleValues: capitalValues.slice(0, 5)
+    })
     
     if (capitalValues.length === 0) {
       console.log('⚠️ No capital values found, showing empty map')
@@ -352,8 +360,18 @@ export default function NoLoadingYearMap({
             totalYears: Object.keys(yearlyData).length,
             year1995Data: yearlyData[1995] ? Object.keys(yearlyData[1995]).length : 0,
             year2008Data: yearlyData[2008] ? Object.keys(yearlyData[2008]).length : 0,
-            year2020Data: yearlyData[2020] ? Object.keys(yearlyData[2020]).length : 0
+            year2020Data: yearlyData[2020] ? Object.keys(yearlyData[2020]).length : 0,
+            sampleYearData: yearlyData[2020] ? Object.keys(yearlyData[2020]).slice(0, 3) : []
           })
+          
+          // 데이터 업데이트 후 상태 확인
+          setTimeout(() => {
+            console.log('🔍 Data state after update:', {
+              allYearlyDataKeys: Object.keys(allYearlyData),
+              year2020Exists: !!allYearlyData[2020],
+              year2020Data: allYearlyData[2020] ? Object.keys(allYearlyData[2020]).length : 0
+            })
+          }, 100)
         } catch (error) {
           console.error('❌ Data update failed:', error)
           setAllYearlyData({})

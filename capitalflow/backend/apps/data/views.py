@@ -570,13 +570,15 @@ class MetadataAPIView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class NewsAPIView(APIView):
-    """뉴스 검색 API"""
+    """뉴스 검색 API - 미리 수집된 데이터 우선 사용"""
     permission_classes = [AllowAny]
     
     def get(self, request):
         """선택된 필터에 기반한 관련 뉴스 검색"""
         try:
+            from .models import NewsData
             from .services.news_crawler import NewsService
+            from django.db.models import Q
             
             # 쿼리 파라미터 추출
             year = request.query_params.get('year')
@@ -601,10 +603,67 @@ class NewsAPIView(APIView):
                     'error': 'year는 숫자여야 합니다'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # 실제 뉴스 서비스만 사용
-            news_service = NewsService()
+            # 1단계: 미리 수집된 뉴스 데이터 확인
+            print(f"🔍 미리 수집된 뉴스 검색: {year_int}, {sector}, {capital_type}")
             
-            # 뉴스 검색
+            # 쿼리 조건 구성
+            query_conditions = Q(year=year_int, is_active=True)
+            
+            if sector:
+                query_conditions &= Q(sector=sector)
+            if capital_type:
+                query_conditions &= Q(capital_type=capital_type)
+            if country:
+                query_conditions &= Q(country=country)
+            
+            # 미리 수집된 뉴스 조회
+            pre_collected_news = NewsData.objects.filter(query_conditions).order_by('-relevance_score', '-published_at')[:20]
+            
+            if pre_collected_news.exists():
+                print(f"✅ 미리 수집된 뉴스 {pre_collected_news.count()}개 발견")
+                
+                # 미리 수집된 데이터를 응답 형식으로 변환
+                articles = []
+                for news in pre_collected_news:
+                    articles.append({
+                        'title': news.title,
+                        'description': news.description,
+                        'url': news.url,
+                        'source': {'name': news.source},
+                        'publishedAt': news.published_at.isoformat(),
+                        'urlToImage': news.image_url,
+                        'relevance_score': news.relevance_score
+                    })
+                
+                response_data = {
+                    'success': True,
+                    'search_params': {
+                        'year': year_int,
+                        'country': country,
+                        'sector': sector,
+                        'capital_type': capital_type,
+                        'use_pre_collected': True
+                    },
+                    'news_data': {
+                        'articles': articles,
+                        'count': len(articles),
+                        'query': f"{sector} {capital_type} {year_int}",
+                        'collected_at': pre_collected_news.first().collected_at.isoformat() if pre_collected_news.exists() else None
+                    },
+                    'metadata': {
+                        'total_articles': len(articles),
+                        'search_query': f"{sector} {capital_type} {year_int}",
+                        'collected_at': pre_collected_news.first().collected_at.isoformat() if pre_collected_news.exists() else None,
+                        'data_source': 'pre_collected'
+                    }
+                }
+                
+                return Response(response_data)
+            
+            # 2단계: 미리 수집된 데이터가 없으면 실시간 크롤링
+            print(f"⚠️ 미리 수집된 뉴스 없음, 실시간 크롤링 시작...")
+            
+            news_service = NewsService()
             result = news_service.get_related_news(
                 year=year_int,
                 country=country,
@@ -620,7 +679,7 @@ class NewsAPIView(APIView):
                     'country': country,
                     'sector': sector,
                     'capital_type': capital_type,
-                    'use_dummy': False
+                    'use_pre_collected': False
                 },
                 'news_data': result,
                 'metadata': {

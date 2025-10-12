@@ -13,8 +13,9 @@ export default function Hero() {
                 <span className="block text-gradient xl:inline">흐름을 보다</span>
               </h1>
               <p className="mt-3 text-base text-gray-500 sm:mt-5 sm:text-lg sm:max-w-xl sm:mx-auto md:mt-5 md:text-xl lg:mx-0">
-                세계 각국의 자본 이동을 시각적으로 탐색하고, 시대별 자본 권력의 변화를 
-                한눈에 파악할 수 있는 인터랙티브 플랫폼입니다.
+                글로벌 자본 흐름을 지도, 차트, 뉴스 등 다양한 시각화 형태로 제공합니다. 
+                World Bank, IMF, FRED, SEC 등 공식 기관 데이터를 통해 
+                완전한 자본 이동 지도를 구축합니다.
               </p>
               <div className="mt-5 sm:mt-8 sm:flex sm:justify-center lg:justify-start">
                 <div className="rounded-md shadow">
