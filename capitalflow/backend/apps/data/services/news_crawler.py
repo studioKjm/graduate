@@ -75,7 +75,7 @@ class GoogleNewsCollector:
             }
             
             logger.info(f"Fetching Google News with URL: {url}")
-            response = requests.get(url, headers=headers, timeout=15)
+            response = requests.get(url, headers=headers, timeout=5)
             
             if response.status_code == 200:
                 articles = self._parse_rss(response.text)
@@ -736,11 +736,11 @@ class NewsService:
             
             logger.info(f"Searching news with query: {query}")
             
-            # 뉴스 수집 (Google News 우선 사용)
+            # 뉴스 수집 (Google News 우선 사용, 타임아웃 적용)
             articles = []
             error_messages = []
             
-            # 1. Google News에서 수집
+            # 1. Google News에서 수집 (타임아웃 5초)
             try:
                 google_articles = self.google_news.search_news(query)
                 articles.extend(google_articles)
@@ -750,25 +750,29 @@ class NewsService:
                 logger.warning(error_msg)
                 error_messages.append(error_msg)
             
-            # 2. Reddit에서 수집
-            try:
-                reddit_articles = self.reddit.search_news(query)
-                articles.extend(reddit_articles)
-                logger.info(f"Reddit returned {len(reddit_articles)} articles")
-            except Exception as e:
-                error_msg = f"Reddit failed: {str(e)}"
-                logger.warning(error_msg)
-                error_messages.append(error_msg)
-            
-            # 3. Hacker News에서 수집
-            try:
-                hn_articles = self.hackernews.search_news(query)
-                articles.extend(hn_articles)
-                logger.info(f"Hacker News returned {len(hn_articles)} articles")
-            except Exception as e:
-                error_msg = f"Hacker News failed: {str(e)}"
-                logger.warning(error_msg)
-                error_messages.append(error_msg)
+            # 결과가 충분하면 다른 소스는 건너뛰기 (성능 최적화)
+            if len(articles) >= 10:
+                logger.info(f"Sufficient articles found ({len(articles)}), skipping other sources")
+            else:
+                # 2. Reddit에서 수집 (타임아웃 3초)
+                try:
+                    reddit_articles = self.reddit.search_news(query)
+                    articles.extend(reddit_articles)
+                    logger.info(f"Reddit returned {len(reddit_articles)} articles")
+                except Exception as e:
+                    error_msg = f"Reddit failed: {str(e)}"
+                    logger.warning(error_msg)
+                    error_messages.append(error_msg)
+                
+                # 3. Hacker News에서 수집 (타임아웃 3초)
+                try:
+                    hn_articles = self.hackernews.search_news(query)
+                    articles.extend(hn_articles)
+                    logger.info(f"Hacker News returned {len(hn_articles)} articles")
+                except Exception as e:
+                    error_msg = f"Hacker News failed: {str(e)}"
+                    logger.warning(error_msg)
+                    error_messages.append(error_msg)
             
             # 결과가 적으면 더 일반적인 검색어로 Google News 재시도
             if len(articles) < 8:

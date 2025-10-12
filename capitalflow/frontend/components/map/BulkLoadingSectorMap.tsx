@@ -346,7 +346,7 @@ export default function BulkLoadingSectorMap({
     }
 
     initializeData()
-  }, [isMounted, sector, capitalTypes])
+  }, [sector, capitalTypes])
 
   // 데이터 변경 시 (연도는 제외) - 최적화된 디바운싱 적용
   useEffect(() => {

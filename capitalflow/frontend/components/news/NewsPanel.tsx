@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { formatNumberBoth } from '@/utils/formatters'
 
 interface NewsPanelProps {
@@ -44,6 +44,10 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedCapitalType, setSelectedCapitalType] = useState<string | null>(null)
+  
+  // 로컬 캐시
+  const [cache, setCache] = useState<Map<string, NewsData>>(new Map())
+  const [lastFetchTime, setLastFetchTime] = useState<Map<string, number>>(new Map())
   // 주요 자본 타입 선택 (첫 번째 타입 우선)
   useEffect(() => {
     if (capitalTypes && capitalTypes.length > 0) {
@@ -53,9 +57,28 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
     }
   }, [capitalTypes])
 
-  // 뉴스 데이터 가져오기
+  // 캐시 키 메모이제이션
+  const cacheKey = useMemo(() => 
+    `${year}-${country || ''}-${sector || ''}-${selectedCapitalType || ''}`, 
+    [year, country, sector, selectedCapitalType]
+  )
+
+  // 뉴스 데이터 가져오기 (캐시 및 디바운싱 적용)
   const fetchNews = useCallback(async () => {
     if (!selectedCapitalType) return
+
+    const now = Date.now()
+    const cacheExpiry = 2 * 60 * 1000 // 2분 캐시
+
+    // 캐시 확인
+    if (cache.has(cacheKey) && lastFetchTime.has(cacheKey)) {
+      const lastFetch = lastFetchTime.get(cacheKey) || 0
+      if (now - lastFetch < cacheExpiry) {
+        console.log('🚀 캐시된 뉴스 데이터 사용:', cacheKey)
+        setNewsData(cache.get(cacheKey)!)
+        return
+      }
+    }
 
     setLoading(true)
     setError(null)
@@ -69,6 +92,8 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
       if (sector) params.append('sector', sector)
       if (selectedCapitalType) params.append('capital_type', selectedCapitalType)
 
+      console.log('🔍 뉴스 API 호출:', `http://localhost:8001/api/v1/capitalflows/news/?${params}`)
+      
       const response = await fetch(`http://localhost:8001/api/v1/capitalflows/news/?${params}`)
       
       if (!response.ok) {
@@ -78,6 +103,12 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
       const data = await response.json()
       
       if (data.success) {
+        console.log('✅ 뉴스 데이터 수신:', data.metadata?.data_source, data.metadata?.total_articles, '개')
+        
+        // 캐시에 저장
+        setCache(prev => new Map(prev).set(cacheKey, data.news_data))
+        setLastFetchTime(prev => new Map(prev).set(cacheKey, now))
+        
         setNewsData(data.news_data)
       } else {
         throw new Error(data.error || '뉴스 데이터를 가져오는데 실패했습니다')
@@ -89,14 +120,32 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
     } finally {
       setLoading(false)
     }
-  }, [year, country, sector, selectedCapitalType])
+  }, [cacheKey, selectedCapitalType, cache, lastFetchTime])
 
-  // 필터가 변경될 때마다 뉴스 갱신
+  // 필터가 변경될 때마다 뉴스 갱신 (즉시 캐시 확인, 디바운싱 적용)
   useEffect(() => {
-    if (selectedCapitalType) {
-      fetchNews()
+    if (!selectedCapitalType) return
+
+    // 즉시 캐시 확인
+    const now = Date.now()
+    const cacheExpiry = 2 * 60 * 1000 // 2분 캐시
+    
+    if (cache.has(cacheKey) && lastFetchTime.has(cacheKey)) {
+      const lastFetch = lastFetchTime.get(cacheKey) || 0
+      if (now - lastFetch < cacheExpiry) {
+        console.log('🚀 즉시 캐시된 뉴스 데이터 사용:', cacheKey)
+        setNewsData(cache.get(cacheKey)!)
+        return
+      }
     }
-  }, [fetchNews])
+
+    // 캐시가 없으면 디바운싱 적용하여 API 호출
+    const timeoutId = setTimeout(() => {
+      fetchNews()
+    }, 100) // 100ms 디바운싱 (더 단축)
+
+    return () => clearTimeout(timeoutId)
+  }, [year, country, sector, selectedCapitalType, cacheKey, cache, lastFetchTime])
 
   // 날짜 포맷팅
   const formatDate = (dateString: string) => {
@@ -257,10 +306,10 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
       {/* 컨텐츠 */}
       <div className="space-y-4">
         {loading && (
-          <div className="flex items-center justify-center py-8">
-            <div className="flex items-center gap-3">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              <span className="text-gray-600">뉴스를 검색하고 있습니다...</span>
+          <div className="flex items-center justify-center py-2">
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+              <span className="text-xs text-gray-600">뉴스 로딩 중...</span>
             </div>
           </div>
         )}

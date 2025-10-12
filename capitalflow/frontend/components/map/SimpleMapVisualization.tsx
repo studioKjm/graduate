@@ -240,7 +240,7 @@ export default function SimpleMapVisualization({
     }
 
     initializeData()
-  }, [isMounted, sector, capitalTypes, year])
+  }, [sector, capitalTypes, year])
 
   // 데이터 변경 시 (디바운싱 적용)
   useEffect(() => {
@@ -263,7 +263,7 @@ export default function SimpleMapVisualization({
     }, 200) // 200ms 디바운싱
 
     return () => clearTimeout(updateTimer)
-  }, [sector, capitalTypes, year, isMounted])
+  }, [sector, capitalTypes, year])
 
   // 클라이언트 마운트
   useEffect(() => {

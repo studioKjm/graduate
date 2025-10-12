@@ -299,7 +299,7 @@ export default function NoLoadingYearMap({
     }
 
     initializeAllData()
-  }, [isMounted, sector, capitalTypes])
+  }, [sector, capitalTypes])
 
   // 분야나 자본타입 변경 시 (디바운싱 적용)
   useEffect(() => {
@@ -383,7 +383,7 @@ export default function NoLoadingYearMap({
     }, 200) // 200ms 디바운싱
 
     return () => clearTimeout(updateTimer)
-  }, [sector, capitalTypes, isMounted])
+  }, [sector, capitalTypes])
 
   // 클라이언트 마운트
   useEffect(() => {

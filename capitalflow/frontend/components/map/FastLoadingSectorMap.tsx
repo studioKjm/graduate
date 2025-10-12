@@ -274,7 +274,7 @@ export default function FastLoadingSectorMap({
     }
 
     initialize()
-  }, [isMounted, sector, capitalTypes])
+  }, [sector, capitalTypes])
 
   // 🖥️ 클라이언트 마운트
   useEffect(() => {

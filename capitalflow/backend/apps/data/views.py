@@ -579,12 +579,24 @@ class NewsAPIView(APIView):
             from .models import NewsData
             from .services.news_crawler import NewsService
             from django.db.models import Q
+            from django.core.cache import cache
+            import hashlib
             
             # 쿼리 파라미터 추출
             year = request.query_params.get('year')
             country = request.query_params.get('country')
             sector = request.query_params.get('sector')
             capital_type = request.query_params.get('capital_type')
+            
+            # 캐시 키 생성
+            cache_key = f"news_{year}_{country}_{sector}_{capital_type}"
+            cache_key_hash = hashlib.md5(cache_key.encode()).hexdigest()
+            
+            # 캐시에서 데이터 확인 (10분 캐시)
+            cached_data = cache.get(cache_key_hash)
+            if cached_data:
+                print(f"✅ 캐시된 뉴스 데이터 사용: {cache_key}")
+                return Response(cached_data)
             
             # 필수 파라미터 검증
             if not year:
@@ -616,8 +628,8 @@ class NewsAPIView(APIView):
             if country:
                 query_conditions &= Q(country=country)
             
-            # 미리 수집된 뉴스 조회
-            pre_collected_news = NewsData.objects.filter(query_conditions).order_by('-relevance_score', '-published_at')[:20]
+            # 미리 수집된 뉴스 조회 (최적화된 쿼리)
+            pre_collected_news = NewsData.objects.filter(query_conditions).select_related().order_by('-relevance_score', '-published_at')[:20]
             
             if pre_collected_news.exists():
                 print(f"✅ 미리 수집된 뉴스 {pre_collected_news.count()}개 발견")
@@ -658,18 +670,32 @@ class NewsAPIView(APIView):
                     }
                 }
                 
+                # 캐시에 저장 (10분)
+                cache.set(cache_key_hash, response_data, 600)
+                print(f"💾 뉴스 데이터 캐시 저장: {cache_key}")
+                
                 return Response(response_data)
             
-            # 2단계: 미리 수집된 데이터가 없으면 실시간 크롤링
+            # 2단계: 미리 수집된 데이터가 없으면 실시간 크롤링 (타임아웃 적용)
             print(f"⚠️ 미리 수집된 뉴스 없음, 실시간 크롤링 시작...")
             
-            news_service = NewsService()
-            result = news_service.get_related_news(
-                year=year_int,
-                country=country,
-                sector=sector,
-                capital_type=capital_type
-            )
+            try:
+                news_service = NewsService()
+                result = news_service.get_related_news(
+                    year=year_int,
+                    country=country,
+                    sector=sector,
+                    capital_type=capital_type
+                )
+            except Exception as e:
+                print(f"❌ 실시간 크롤링 실패: {e}")
+                # 실시간 크롤링 실패 시 빈 결과 반환
+                result = {
+                    'articles': [],
+                    'count': 0,
+                    'query': f"{sector} {capital_type} {year_int}",
+                    'collected_at': None
+                }
             
             # 응답 데이터 구성
             response_data = {
@@ -689,6 +715,10 @@ class NewsAPIView(APIView):
                     'data_source': 'web_crawling'
                 }
             }
+            
+            # 캐시에 저장 (5분 - 실시간 크롤링은 짧은 캐시)
+            cache.set(cache_key_hash, response_data, 300)
+            print(f"💾 실시간 뉴스 데이터 캐시 저장: {cache_key}")
             
             return Response(response_data)
             

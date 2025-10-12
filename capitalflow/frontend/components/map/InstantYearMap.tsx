@@ -313,7 +313,7 @@ export default function InstantYearMap({
     }, 200) // 200ms 디바운싱
 
     return () => clearTimeout(updateTimer)
-  }, [sector, capitalTypes, isMounted])
+  }, [sector, capitalTypes])
 
   // 클라이언트 마운트
   useEffect(() => {
