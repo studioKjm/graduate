@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
+import { useAuth } from '@/hooks/useAuth'
+import { useRouter } from 'next/navigation'
 
 const navigation = [
   { name: '홈', href: '/' },
@@ -16,6 +18,14 @@ const navigation = [
 export default function Navbar() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { isAuthenticated, user, logout } = useAuth()
+  const router = useRouter()
+
+  const handleLogout = () => {
+    logout()
+    router.push('/')
+    setMobileMenuOpen(false)
+  }
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">
@@ -52,18 +62,34 @@ export default function Navbar() {
           {/* Desktop Auth Links */}
           <div className="hidden md:block">
             <div className="ml-4 flex items-center space-x-4">
-              <Link
-                href="/auth/login"
-                className="text-gray-600 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                로그인
-              </Link>
-              <Link
-                href="/auth/register"
-                className="btn-primary text-sm"
-              >
-                회원가입
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <span className="text-gray-600 text-sm">
+                    안녕하세요, {user?.username}님
+                  </span>
+                  <button
+                    onClick={handleLogout}
+                    className="text-gray-600 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+                  >
+                    로그아웃
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/auth/login"
+                    className="text-gray-600 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+                  >
+                    로그인
+                  </Link>
+                  <Link
+                    href="/auth/register"
+                    className="btn-primary text-sm"
+                  >
+                    회원가입
+                  </Link>
+                </>
+              )}
             </div>
           </div>
 
@@ -103,20 +129,39 @@ export default function Navbar() {
               </Link>
             ))}
             <div className="pt-2 border-t border-gray-200">
-              <Link
-                href="/auth/login"
-                className="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                로그인
-              </Link>
-              <Link
-                href="/auth/register"
-                className="block px-3 py-2 rounded-md text-base font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                회원가입
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <div className="px-3 py-2 text-sm text-gray-600">
+                    안녕하세요, {user?.username}님
+                  </div>
+                  <button
+                    onClick={() => {
+                      handleLogout()
+                      setMobileMenuOpen(false)
+                    }}
+                    className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50"
+                  >
+                    로그아웃
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/auth/login"
+                    className="block px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-primary-600 hover:bg-gray-50"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    로그인
+                  </Link>
+                  <Link
+                    href="/auth/register"
+                    className="block px-3 py-2 rounded-md text-base font-medium text-primary-600 hover:text-primary-700 hover:bg-primary-50"
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    회원가입
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

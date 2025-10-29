@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
+import apiClient from '@/lib/api-client'
 
 const registerSchema = z.object({
   username: z
@@ -60,43 +61,43 @@ export default function RegisterForm() {
   const onSubmit = async (data: RegisterFormData) => {
     setIsLoading(true)
     try {
-      // TODO: 실제 API 호출로 대체
-      const response = await fetch('/api/auth/register/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: data.username,
-          email: data.email,
-          password: data.password,
-          password_confirm: data.password_confirm,
-          first_name: data.first_name,
-          last_name: data.last_name,
-        }),
+      const result = await apiClient.post('/api/v1/auth/register/', {
+        username: data.username,
+        email: data.email,
+        password: data.password,
+        password_confirm: data.password_confirm,
+        first_name: data.first_name,
+        last_name: data.last_name,
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        // 토큰 저장
+      // 토큰 저장
+      if (result.access && result.refresh) {
         localStorage.setItem('access_token', result.access)
         localStorage.setItem('refresh_token', result.refresh)
         
+        // 인증 상태 변경 이벤트 발생 (약간의 지연을 추가하여 React 상태 업데이트 확인)
+        setTimeout(() => {
+          window.dispatchEvent(new Event('auth-state-change'))
+        }, 100)
+        
         toast.success('회원가입이 완료되었습니다!')
         router.push('/map')
-      } else {
-        const error = await response.json()
-        if (error.username) {
-          toast.error('이미 사용 중인 사용자명입니다.')
-        } else if (error.email) {
-          toast.error('이미 등록된 이메일입니다.')
-        } else {
-          toast.error('회원가입에 실패했습니다.')
-        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Register error:', error)
-      toast.error('회원가입 중 오류가 발생했습니다.')
+      
+      // 에러 메시지에 따라 다르게 처리
+      if (error.message?.includes('username')) {
+        toast.error('이미 사용 중인 사용자명입니다.')
+      } else if (error.message?.includes('email')) {
+        toast.error('이미 등록된 이메일입니다.')
+      } else if (error.message?.includes('timeout')) {
+        toast.error('서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.')
+      } else if (error.message?.includes('404')) {
+        toast.error('서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.')
+      } else {
+        toast.error(error.message || '회원가입 중 오류가 발생했습니다.')
+      }
     } finally {
       setIsLoading(false)
     }

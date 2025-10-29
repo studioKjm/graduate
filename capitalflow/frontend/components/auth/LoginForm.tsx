@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
+import apiClient from '@/lib/api-client'
 
 const loginSchema = z.object({
   username: z.string().min(1, '사용자명을 입력해주세요'),
@@ -31,30 +32,34 @@ export default function LoginForm() {
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true)
     try {
-      // TODO: 실제 API 호출로 대체
-      const response = await fetch('/api/auth/login/', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      })
+      const result = await apiClient.post('/api/v1/auth/login/', data)
 
-      if (response.ok) {
-        const result = await response.json()
-        // 토큰 저장
+      // 토큰 저장
+      if (result.access && result.refresh) {
         localStorage.setItem('access_token', result.access)
         localStorage.setItem('refresh_token', result.refresh)
         
+        // 인증 상태 변경 이벤트 발생 (약간의 지연을 추가하여 React 상태 업데이트 확인)
+        setTimeout(() => {
+          window.dispatchEvent(new Event('auth-state-change'))
+        }, 100)
+        
         toast.success('로그인 성공!')
         router.push('/map')
-      } else {
-        const error = await response.json()
-        toast.error(error.error || '로그인에 실패했습니다.')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error)
-      toast.error('로그인 중 오류가 발생했습니다.')
+      
+      // 에러 메시지에 따라 다르게 처리
+      if (error.message?.includes('401') || error.message?.includes('Invalid credentials')) {
+        toast.error('사용자명 또는 비밀번호가 올바르지 않습니다.')
+      } else if (error.message?.includes('timeout')) {
+        toast.error('서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.')
+      } else if (error.message?.includes('404')) {
+        toast.error('서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.')
+      } else {
+        toast.error(error.message || '로그인 중 오류가 발생했습니다.')
+      }
     } finally {
       setIsLoading(false)
     }
