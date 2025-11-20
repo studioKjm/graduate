@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { formatNumberBoth } from '@/utils/formatters'
+import apiClient from '@/lib/api-client'
 
 interface NoLoadingYearMapProps {
   year?: number
@@ -26,10 +27,14 @@ export default function NoLoadingYearMap({
 }: NoLoadingYearMapProps) {
   const [mapData, setMapData] = useState<any>(null)
   const [allYearlyData, setAllYearlyData] = useState<YearlyData>({})
-  const [isMounted, setIsMounted] = useState(false)
+  // 브라우저 환경에서는 즉시 true로 설정하여 초기화가 바로 시작되도록 함
+  const [isMounted, setIsMounted] = useState(typeof window !== 'undefined')
   const [hoveredCountry, setHoveredCountry] = useState<any>(null)
   const [mousePosition, setMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const prevCapitalTypesRef = useRef<string[]>(capitalTypes)
+  const initializationInProgressRef = useRef(false) // 초기화가 진행 중인지 추적 (비동기 작업 중복 방지)
 
   // 단일 연도 데이터 로딩
   const fetchYearData = async (sector: string, capitalTypes: string[], year: number) => {
@@ -42,29 +47,39 @@ export default function NoLoadingYearMap({
         return {}
       }
 
+      // API 클라이언트를 사용하여 요청
       const params = new URLSearchParams()
       if (sector) params.append('sector', sector)
       params.append('year', year.toString())
-      if (capitalTypes.length > 0) {
-        capitalTypes.forEach(type => params.append('capital_types', type))
-      }
-      params.append('aggregate', 'true')
+      // capital_types는 배열로 전달 (백엔드에서 getlist로 받음)
+      capitalTypes.forEach(type => params.append('capital_types', type))
       
-      const url = `http://localhost:8001/api/v1/visualization/map-data/?${params}`
+      const url = `/api/v1/visualization/map-data/?${params.toString()}`
       console.log(`🌐 Fetching from: ${url}`)
       
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        }
-      })
+      // API 클라이언트가 준비되지 않은 경우 재시도
+      let retryCount = 0
+      const maxRetries = 3
+      let data
       
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      while (retryCount < maxRetries) {
+        try {
+          data = await apiClient.get(url)
+          break
+        } catch (error: any) {
+          retryCount++
+          if (retryCount >= maxRetries) {
+            throw error
+          }
+          // 네트워크 에러인 경우 재시도
+          if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+            console.warn(`⚠️ 네트워크 에러 발생, ${retryCount}/${maxRetries} 재시도 중...`)
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)) // 지수 백오프
+            continue
+          }
+          throw error
+        }
       }
-
-      const data = await response.json()
       console.log(`📦 Response data for year ${year}:`, {
         success: data.success,
         hasData: !!data.data,
@@ -91,19 +106,35 @@ export default function NoLoadingYearMap({
       
       return processedData
     } catch (error: any) {
-      console.error(`❌ Error loading year ${year}:`, error.message)
+      const errorMessage = error.message || String(error)
+      console.error(`❌ Error loading year ${year}:`, errorMessage)
+      
+      // 네트워크 에러인 경우 사용자에게 알림
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError') || errorMessage.includes('timeout')) {
+        setError(`백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요. (연도: ${year})`)
+      }
+      
+      // 에러 발생 시 빈 데이터 반환 (지도는 계속 표시되도록)
       return {}
     }
   }
 
   // 현재 연도의 맵 데이터 생성
+  // mapData가 로드되기 전에는 실행되지 않도록 보호
   const currentMapData = useMemo(() => {
-    console.log('🗺️ Generating map data for:', { year, sector, capitalTypes: capitalTypes.length })
-    
-    if (!mapData) {
-      console.log('❌ No map data available')
+    // mapData가 없거나 초기화가 완료되지 않았으면 즉시 null 반환 (로딩 중)
+    if (!mapData || isLoading) {
       return null
     }
+    
+    console.log('🗺️ [RENDER] Generating map data for:', { 
+      year, 
+      sector, 
+      capitalTypes: capitalTypes.length,
+      hasMapData: !!mapData,
+      hasYearlyData: Object.keys(allYearlyData).length > 0,
+      isLoading
+    })
 
     // 자본타입이 전체해제된 경우 시각적으로만 0으로 표시 (데이터는 유지)
     if (capitalTypes.length === 0) {
@@ -231,79 +262,62 @@ export default function NoLoadingYearMap({
       }
     })
 
-    console.log('✅ Map data generated successfully for year', year)
+    console.log('✅ [RENDER] Map data generated successfully for year', year)
     return {
       type: 'FeatureCollection',
       features: enrichedFeatures
     }
-  }, [mapData, allYearlyData, year, capitalTypes, sector])
+  }, [mapData, allYearlyData, year, capitalTypes, sector, isLoading]) // isLoading 추가하여 로딩 중에는 재계산 방지
 
-  // 초기 로딩 - 모든 연도 데이터를 한 번에 로딩
+  // 분야나 자본타입 변경 시 데이터 재로딩
   useEffect(() => {
-    if (!isMounted) return
+    if (typeof window === 'undefined' || !isMounted) return
 
-    const initializeAllData = async () => {
-      console.log('🚀 Initializing all years data at once...')
-
-      try {
-        // 1. GeoJSON 로딩
-        console.log('📍 Loading GeoJSON...')
-        const geoResponse = await fetch('/world-countries-detailed.json')
-        if (!geoResponse.ok) {
-          throw new Error(`Failed to load GeoJSON: ${geoResponse.status}`)
-        }
-        const worldData = await geoResponse.json()
-        setMapData(worldData)
-        console.log('✅ GeoJSON loaded successfully')
-
-        // 2. 모든 연도 데이터를 병렬로 로딩 (1995-2024)
-        console.log('📊 Loading all years data in parallel...')
-        const allYears = Array.from({ length: 30 }, (_, i) => 1995 + i) // 1995-2024
-        console.log('📅 Years to load:', allYears)
-        
-        // 모든 연도를 병렬로 로딩
-        const promises = allYears.map(y => fetchYearData(sector, capitalTypes, y))
-        const results = await Promise.allSettled(promises)
-        
-        const yearlyData: YearlyData = {}
-        results.forEach((result, index) => {
-          const currentYear = allYears[index]
-          if (result.status === 'fulfilled') {
-            yearlyData[currentYear] = result.value
-            const dataCount = Object.keys(result.value).length
-            console.log(`✅ Year ${currentYear} data loaded: ${dataCount} countries`, {
-              sampleData: Object.keys(result.value).slice(0, 3),
-              totalKeys: Object.keys(result.value).length
-            })
-          } else {
-            console.warn(`⚠️ Failed to load year ${currentYear}:`, result.reason)
-            yearlyData[currentYear] = {}
-          }
-        })
-        
-        setAllYearlyData(yearlyData)
-        console.log('✅ All years data loaded successfully', {
-          totalYears: Object.keys(yearlyData).length,
-          sampleYears: Object.keys(yearlyData).slice(0, 5),
-          year1995Data: yearlyData[1995] ? Object.keys(yearlyData[1995]).length : 0,
-          year2000Data: yearlyData[2000] ? Object.keys(yearlyData[2000]).length : 0,
-          year2008Data: yearlyData[2008] ? Object.keys(yearlyData[2008]).length : 0,
-          year2010Data: yearlyData[2010] ? Object.keys(yearlyData[2010]).length : 0,
-          year2020Data: yearlyData[2020] ? Object.keys(yearlyData[2020]).length : 0
-        })
-
-      } catch (error) {
-        console.error('❌ Failed to initialize data:', error)
-        setAllYearlyData({})
+    const updateTimer = setTimeout(async () => {
+      const prevCapitalTypes = prevCapitalTypesRef.current
+      const hasCapitalTypesChanged = JSON.stringify(prevCapitalTypes) !== JSON.stringify(capitalTypes)
+      
+      // 자본타입이 전체해제된 경우 데이터를 지우지 않고 그대로 유지
+      if (capitalTypes.length === 0) {
+        prevCapitalTypesRef.current = capitalTypes
+        return
       }
-    }
+      
+      // 자본타입이 다시 선택된 경우 데이터를 다시 로딩
+      if (hasCapitalTypesChanged) {
+        console.log('🔄 [UPDATE] Capital types changed, reloading data...')
+        
+        try {
+          const allYears = Array.from({ length: 30 }, (_, i) => 1995 + i)
+          const promises = allYears.map(y => fetchYearData(sector, capitalTypes, y))
+          const results = await Promise.allSettled(promises)
+          
+          const yearlyData: YearlyData = {}
+          results.forEach((result, index) => {
+            const currentYear = allYears[index]
+            if (result.status === 'fulfilled') {
+              yearlyData[currentYear] = result.value
+            } else {
+              yearlyData[currentYear] = {}
+            }
+          })
+          
+          setAllYearlyData(yearlyData)
+          console.log('✅ [UPDATE] Data updated for sector/capital type change')
+        } catch (error) {
+          console.error('❌ [UPDATE] Data update failed:', error)
+        }
+      }
+      
+      prevCapitalTypesRef.current = capitalTypes
+    }, 200)
 
-    initializeAllData()
-  }, [sector, capitalTypes])
+    return () => clearTimeout(updateTimer)
+  }, [sector, capitalTypes, isMounted])
 
   // 분야나 자본타입 변경 시 (디바운싱 적용)
   useEffect(() => {
-    if (!isMounted) return
+    if (typeof window === 'undefined' || !isMounted) return
 
     const updateTimer = setTimeout(async () => {
       const prevCapitalTypes = prevCapitalTypesRef.current
@@ -385,10 +399,117 @@ export default function NoLoadingYearMap({
     return () => clearTimeout(updateTimer)
   }, [sector, capitalTypes])
 
-  // 클라이언트 마운트
+  // 클라이언트 마운트 및 초기화 - 한 번에 처리
+  // 빈 의존성 배열로 마운트 시 한 번만 실행되도록 보장
   useEffect(() => {
-    setIsMounted(true)
-  }, [])
+    // 브라우저 환경에서만 실행
+    if (typeof window === 'undefined') {
+      return
+    }
+    
+    // 이미 초기화가 진행 중이면 중복 실행 방지
+    // 새로고침 시 컴포넌트가 완전히 새로 생성되므로 ref도 초기화됨
+    if (initializationInProgressRef.current) {
+      console.log('⏸️ [MOUNT] 초기화가 이미 진행 중, 중복 실행 방지')
+      return
+    }
+    
+    console.log('🔧 [MOUNT] 컴포넌트 마운트 시작 - 즉시 초기화 시작')
+    
+    // 초기화 함수
+    const initializeAllData = async () => {
+      // 비동기 작업 중복 방지
+      if (initializationInProgressRef.current) {
+        return
+      }
+      
+      initializationInProgressRef.current = true
+      console.log('🚀 [INIT] Initializing all years data at once...')
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        // 1. GeoJSON 로딩
+        console.log('📍 [GEOJSON] Loading GeoJSON...')
+        const geoResponse = await fetch('/world-countries-detailed.json')
+        if (!geoResponse.ok) {
+          throw new Error(`Failed to load GeoJSON: ${geoResponse.status}`)
+        }
+        const worldData = await geoResponse.json()
+        setMapData(worldData)
+        console.log('✅ [GEOJSON] GeoJSON loaded successfully, features:', worldData.features?.length || 0)
+
+        // 2. 모든 연도 데이터를 병렬로 로딩 (1995-2024)
+        console.log('📊 [DATA] Loading all years data in parallel...')
+        const allYears = Array.from({ length: 30 }, (_, i) => 1995 + i) // 1995-2024
+        console.log('📅 [DATA] Years to load:', allYears.length, 'years')
+        
+        // 모든 연도를 병렬로 로딩
+        const promises = allYears.map(y => fetchYearData(sector, capitalTypes, y))
+        const results = await Promise.allSettled(promises)
+        
+        const yearlyData: YearlyData = {}
+        let successCount = 0
+        let failureCount = 0
+        
+        results.forEach((result, index) => {
+          const currentYear = allYears[index]
+          if (result.status === 'fulfilled') {
+            yearlyData[currentYear] = result.value
+            const dataCount = Object.keys(result.value).length
+            if (dataCount > 0) successCount++
+            if (index < 3 || index === allYears.length - 1) {
+              console.log(`✅ [DATA] Year ${currentYear} data loaded: ${dataCount} countries`)
+            }
+          } else {
+            failureCount++
+            if (index < 3) {
+              console.warn(`⚠️ [DATA] Failed to load year ${currentYear}:`, result.reason)
+            }
+            yearlyData[currentYear] = {}
+          }
+        })
+        
+        setAllYearlyData(yearlyData)
+        
+        // 에러가 많이 발생한 경우 사용자에게 알림
+        if (failureCount > successCount) {
+          setError(`일부 데이터를 불러오지 못했습니다. 백엔드 서버가 실행 중인지 확인해주세요. (성공: ${successCount}, 실패: ${failureCount})`)
+        }
+        
+        console.log('✅ [INIT] All years data loaded successfully', {
+          totalYears: Object.keys(yearlyData).length,
+          successCount,
+          failureCount
+        })
+
+      } catch (error: any) {
+        console.error('❌ [INIT] Failed to initialize data:', error)
+        const errorMessage = error.message || String(error)
+        setError(`데이터 초기화 실패: ${errorMessage}`)
+        setAllYearlyData({})
+        
+        // 네트워크 에러인 경우 자동 재시도
+        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError') || errorMessage.includes('timeout')) {
+          console.log('🔄 [RETRY] 네트워크 에러 발생, 3초 후 자동 재시도...')
+          setTimeout(() => {
+            initializeAllData()
+          }, 3000)
+        }
+      } finally {
+        setIsLoading(false)
+        initializationInProgressRef.current = false // 초기화 완료 후 플래그 리셋
+      }
+    }
+    
+    // 즉시 초기화 시작
+    initializeAllData()
+    
+    // cleanup: 컴포넌트 언마운트 시 플래그 리셋
+    return () => {
+      initializationInProgressRef.current = false
+    }
+  }, []) // 빈 의존성 배열로 마운트 시 한 번만 실행
 
   // 현재 연도 데이터를 상위 컴포넌트로 전달
   useEffect(() => {
@@ -509,33 +630,63 @@ export default function NoLoadingYearMap({
     return '#93c5fd' // 매우 밝은 파란색
   }
 
-  if (!isMounted) {
+  // 초기 로딩 중이거나 mapData가 없는 경우 - 먼저 체크
+  // isMounted는 이미 브라우저 환경에서 true로 설정되므로 체크 불필요
+  // initializationStartedRef는 useEffect가 실행되기 전에는 false일 수 있으므로,
+  // isLoading과 mapData 상태만으로 판단
+  if (isLoading || !mapData) {
+    // 로그를 최소화하여 성능 향상
     return (
       <div className="w-full h-full flex items-center justify-center bg-gray-50">
-        <div className="text-gray-600">지도 초기화 중...</div>
-      </div>
-    )
-  }
-
-  // 초기 로딩 중일 때만 로딩 표시
-  if (!isMounted) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-50">
-        <div className="text-gray-600">모든 연도 데이터 로딩 중...</div>
+        <div className="text-center">
+          <div className="text-gray-600 mb-2">
+            {!mapData ? 'GeoJSON 로딩 중...' : '데이터 로딩 중...'}
+          </div>
+          {error && (
+            <div className="text-sm text-red-600 mt-2 max-w-md px-4">
+              {error}
+            </div>
+          )}
+        </div>
       </div>
     )
   }
 
   if (!currentMapData) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-50">
-        <div className="text-red-600">지도 데이터를 불러올 수 없습니다.</div>
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
+        <div className="text-red-600 font-semibold mb-2">지도 데이터를 불러올 수 없습니다.</div>
+        {error && (
+          <div className="text-sm text-gray-600 max-w-md text-center px-4">
+            {error}
+          </div>
+        )}
+        {isLoading && (
+          <div className="text-sm text-gray-500 mt-2">데이터 로딩 중...</div>
+        )}
       </div>
     )
   }
 
   return (
     <div className="w-full h-full relative bg-blue-50">
+      {/* 에러 메시지 표시 */}
+      {error && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-yellow-100 border border-yellow-400 text-yellow-800 px-4 py-2 rounded-lg shadow-lg max-w-2xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <strong>⚠️ 경고:</strong> {error}
+            </div>
+            <button
+              onClick={() => setError(null)}
+              className="ml-4 text-yellow-600 hover:text-yellow-800"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+      
       {/* SVG 지도 */}
       <svg
         width="100%"

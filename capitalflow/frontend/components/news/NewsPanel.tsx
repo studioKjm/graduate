@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { formatNumberBoth } from '@/utils/formatters'
+import apiClient from '@/lib/api-client'
 
 interface NewsPanelProps {
   year: number
@@ -92,15 +93,10 @@ export default function NewsPanel({ year, country, sector, capitalTypes }: NewsP
       if (sector) params.append('sector', sector)
       if (selectedCapitalType) params.append('capital_type', selectedCapitalType)
 
-      console.log('🔍 뉴스 API 호출:', `http://localhost:8001/api/v1/capitalflows/news/?${params}`)
+      const url = `/api/v1/capitalflows/news/?${params.toString()}`
+      console.log('🔍 뉴스 API 호출:', url)
       
-      const response = await fetch(`http://localhost:8001/api/v1/capitalflows/news/?${params}`)
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
+      const data = await apiClient.get(url)
       
       if (data.success) {
         console.log('✅ 뉴스 데이터 수신:', data.metadata?.data_source, data.metadata?.total_articles, '개')
