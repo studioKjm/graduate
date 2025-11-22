@@ -103,3 +103,10 @@ dmypy.json
 !package-lock.json
 !**/package.json
 !**/package-lock.json
+# Config files (must be tracked)
+!tsconfig.json
+!**/tsconfig.json
+!next.config.js
+!**/next.config.js
+!next-env.d.ts
+!**/next-env.d.ts
