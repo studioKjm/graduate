@@ -52,34 +52,14 @@ export default function NoLoadingYearMap({
       if (sector) params.append('sector', sector)
       params.append('year', year.toString())
       // capital_types는 배열로 전달 (백엔드에서 getlist로 받음)
-      capitalTypes.forEach(type => params.append('capital_types', type))
+        capitalTypes.forEach(type => params.append('capital_types', type))
       
       const url = `/api/v1/visualization/map-data/?${params.toString()}`
       console.log(`🌐 Fetching from: ${url}`)
       
-      // API 클라이언트가 준비되지 않은 경우 재시도
-      let retryCount = 0
-      const maxRetries = 3
-      let data
-      
-      while (retryCount < maxRetries) {
-        try {
-          data = await apiClient.get(url)
-          break
-        } catch (error: any) {
-          retryCount++
-          if (retryCount >= maxRetries) {
-            throw error
-          }
-          // 네트워크 에러인 경우 재시도
-          if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-            console.warn(`⚠️ 네트워크 에러 발생, ${retryCount}/${maxRetries} 재시도 중...`)
-            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)) // 지수 백오프
-            continue
-          }
-          throw error
-        }
-      }
+      // 실제 데이터만 사용하므로 재시도 로직 제거 (더미 데이터 방지)
+      // 백엔드 서버가 없으면 즉시 실패하여 에러 메시지 표시
+      const data = await apiClient.get(url)
       console.log(`📦 Response data for year ${year}:`, {
         success: data.success,
         hasData: !!data.data,
@@ -114,8 +94,9 @@ export default function NoLoadingYearMap({
         setError(`백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요. (연도: ${year})`)
       }
       
-      // 에러 발생 시 빈 데이터 반환 (지도는 계속 표시되도록)
-      return {}
+      // 에러 발생 시 null 반환 (더미 데이터 방지)
+      // 실제 데이터만 사용하므로 에러 시 데이터 없음
+      return null
     }
   }
 
@@ -176,24 +157,10 @@ export default function NoLoadingYearMap({
       currentYearDataIsObject: currentYearData && typeof currentYearData === 'object'
     })
     
-    // 현재 연도 데이터가 없으면 빈 데이터로 표시 (로딩 없음)
-    if (!currentYearData) {
-      console.log(`⚠️ No data for year ${year}, showing empty map`)
-      return {
-        type: 'FeatureCollection',
-        features: mapData.features.map((feature: any) => ({
-          ...feature,
-          properties: {
-            ...feature.properties,
-            country_name: feature.properties?.NAME || feature.properties?.name || feature.id,
-            country_code: feature.id,
-            capital_amount: 0,
-            intensity: 0,
-            selected_capital_types: capitalTypes.join(', '),
-            capital_type_count: capitalTypes.length
-          }
-        }))
-      }
+    // 현재 연도 데이터가 없으면 null 반환 (지도 표시 방지, 실제 데이터만 사용)
+    if (!currentYearData || Object.keys(currentYearData).length === 0) {
+      console.log(`⚠️ No data for year ${year}, returning null (no dummy data)`)
+      return null
     }
 
     // 안전한 데이터 처리
@@ -204,23 +171,10 @@ export default function NoLoadingYearMap({
       sampleValues: capitalValues.slice(0, 5)
     })
     
+    // 실제 자본 값이 없으면 null 반환 (더미 데이터 방지)
     if (capitalValues.length === 0) {
-      console.log('⚠️ No capital values found, showing empty map')
-      return {
-        type: 'FeatureCollection',
-        features: mapData.features.map((feature: any) => ({
-          ...feature,
-          properties: {
-            ...feature.properties,
-            country_name: feature.properties?.NAME || feature.properties?.name || feature.id,
-            country_code: feature.id,
-            capital_amount: 0,
-            intensity: 0,
-            selected_capital_types: capitalTypes.join(', '),
-            capital_type_count: capitalTypes.length
-          }
-        }))
-      }
+      console.log('⚠️ No capital values found, returning null (no dummy data)')
+      return null
     }
 
     // 더 드라마틱한 색상 분포를 위한 로그 스케일 적용
@@ -289,22 +243,22 @@ export default function NoLoadingYearMap({
         
         try {
           const allYears = Array.from({ length: 30 }, (_, i) => 1995 + i)
-          const promises = allYears.map(y => fetchYearData(sector, capitalTypes, y))
-          const results = await Promise.allSettled(promises)
-          
+        const promises = allYears.map(y => fetchYearData(sector, capitalTypes, y))
+        const results = await Promise.allSettled(promises)
+        
           const yearlyData: YearlyData = {}
           results.forEach((result, index) => {
             const currentYear = allYears[index]
-            if (result.status === 'fulfilled') {
+            if (result.status === 'fulfilled' && result.value !== null && typeof result.value === 'object') {
+              // 실제 데이터만 저장 (null이 아닌 경우)
               yearlyData[currentYear] = result.value
-            } else {
-              yearlyData[currentYear] = {}
             }
+            // 에러 발생 시 데이터 저장하지 않음 (더미 데이터 방지)
           })
-          
-          setAllYearlyData(yearlyData)
+        
+        setAllYearlyData(yearlyData)
           console.log('✅ [UPDATE] Data updated for sector/capital type change')
-        } catch (error) {
+      } catch (error) {
           console.error('❌ [UPDATE] Data update failed:', error)
         }
       }
@@ -359,13 +313,17 @@ export default function NoLoadingYearMap({
           const yearlyData: YearlyData = {}
           results.forEach((result, index) => {
             const currentYear = allYears[index]
-            if (result.status === 'fulfilled') {
+            if (result.status === 'fulfilled' && result.value !== null && typeof result.value === 'object') {
+              // 실제 데이터만 저장
               yearlyData[currentYear] = result.value
               const dataCount = Object.keys(result.value).length
               console.log(`✅ Year ${currentYear} data reloaded: ${dataCount} countries`)
-            } else {
+            } else if (result.status === 'rejected') {
               console.warn(`⚠️ Failed to reload year ${currentYear}:`, result.reason)
-              yearlyData[currentYear] = {}
+              // 에러 발생 시 데이터 저장하지 않음 (더미 데이터 방지)
+            } else {
+              console.warn(`⚠️ Year ${currentYear} returned null (no data)`)
+              // null 데이터는 저장하지 않음 (더미 데이터 방지)
             }
           })
           
@@ -455,25 +413,36 @@ export default function NoLoadingYearMap({
         results.forEach((result, index) => {
           const currentYear = allYears[index]
           if (result.status === 'fulfilled') {
-            yearlyData[currentYear] = result.value
-            const dataCount = Object.keys(result.value).length
-            if (dataCount > 0) successCount++
-            if (index < 3 || index === allYears.length - 1) {
-              console.log(`✅ [DATA] Year ${currentYear} data loaded: ${dataCount} countries`)
+            // null이 아닌 경우에만 데이터 저장 (실제 데이터만 사용)
+            if (result.value !== null && typeof result.value === 'object') {
+              yearlyData[currentYear] = result.value
+              const dataCount = Object.keys(result.value).length
+              if (dataCount > 0) successCount++
+              if (index < 3 || index === allYears.length - 1) {
+                console.log(`✅ [DATA] Year ${currentYear} data loaded: ${dataCount} countries`)
+              }
+            } else {
+              failureCount++
+              if (index < 3) {
+                console.warn(`⚠️ [DATA] Year ${currentYear} returned null (no data)`)
+              }
             }
           } else {
             failureCount++
             if (index < 3) {
               console.warn(`⚠️ [DATA] Failed to load year ${currentYear}:`, result.reason)
             }
-            yearlyData[currentYear] = {}
+            // 에러 발생 시 데이터 저장하지 않음 (더미 데이터 방지)
           }
         })
         
         setAllYearlyData(yearlyData)
         
-        // 에러가 많이 발생한 경우 사용자에게 알림
-        if (failureCount > successCount) {
+        // 실제 데이터가 하나도 없는 경우 에러 표시
+        if (successCount === 0) {
+          setError(`백엔드 서버에서 데이터를 불러올 수 없습니다. 서버가 실행 중인지 확인해주세요. (실패: ${failureCount}개 연도)`)
+          setAllYearlyData({}) // 빈 데이터로 설정하여 지도 표시 방지
+        } else if (failureCount > successCount) {
           setError(`일부 데이터를 불러오지 못했습니다. 백엔드 서버가 실행 중인지 확인해주세요. (성공: ${successCount}, 실패: ${failureCount})`)
         }
         
@@ -489,13 +458,9 @@ export default function NoLoadingYearMap({
         setError(`데이터 초기화 실패: ${errorMessage}`)
         setAllYearlyData({})
         
-        // 네트워크 에러인 경우 자동 재시도
-        if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError') || errorMessage.includes('timeout')) {
-          console.log('🔄 [RETRY] 네트워크 에러 발생, 3초 후 자동 재시도...')
-          setTimeout(() => {
-            initializeAllData()
-          }, 3000)
-        }
+        // 네트워크 에러인 경우 자동 재시도하지 않음 (실제 데이터만 사용)
+        // 재시도 로직 제거: 더미 데이터 방지를 위해 실패 시 즉시 로딩 완료 처리
+        console.log('⚠️ [INIT] 백엔드 서버 연결 실패 - 실제 데이터 없음, 지도 표시 안 함')
       } finally {
         setIsLoading(false)
         initializationInProgressRef.current = false // 초기화 완료 후 플래그 리셋
@@ -647,23 +612,34 @@ export default function NoLoadingYearMap({
               {error}
             </div>
           )}
-        </div>
+      </div>
       </div>
     )
   }
 
+  // 실제 데이터가 없으면 지도 표시하지 않음 (더미 데이터 방지)
   if (!currentMapData) {
+    // 데이터가 로딩 중이면 로딩 메시지 표시
+    if (isLoading) {
+      return (
+        <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
+          <div className="text-gray-600 mb-2">데이터 로딩 중...</div>
+        </div>
+      )
+    }
+    
+    // 실제 데이터가 없으면 에러 메시지 표시 (지도 표시 안 함)
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
-        <div className="text-red-600 font-semibold mb-2">지도 데이터를 불러올 수 없습니다.</div>
-        {error && (
-          <div className="text-sm text-gray-600 max-w-md text-center px-4">
-            {error}
-          </div>
-        )}
-        {isLoading && (
-          <div className="text-sm text-gray-500 mt-2">데이터 로딩 중...</div>
-        )}
+        <div className="text-red-600 font-semibold mb-2 text-center px-4">
+          백엔드 서버에서 데이터를 불러올 수 없습니다.
+        </div>
+        <div className="text-sm text-gray-600 max-w-md text-center px-4 mb-4">
+          {error || '백엔드 서버가 실행 중인지 확인해주세요. 실제 데이터만 사용하므로 서버가 필요합니다.'}
+        </div>
+        <div className="text-xs text-gray-500 max-w-md text-center px-4">
+          더미 데이터는 사용하지 않습니다. 반드시 실제 데이터만 표시됩니다.
+        </div>
       </div>
     )
   }

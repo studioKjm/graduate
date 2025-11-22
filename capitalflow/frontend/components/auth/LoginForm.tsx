@@ -39,13 +39,32 @@ export default function LoginForm() {
         localStorage.setItem('access_token', result.access)
         localStorage.setItem('refresh_token', result.refresh)
         
+        // 사용자 정보 저장 (관리자 정보 포함)
+        const userInfo = {
+          id: result.user_id,
+          username: result.username,
+          email: result.email || '',
+          is_staff: result.is_staff === true || result.is_staff === 'true' || result.is_staff === 1,  // boolean, 문자열, 숫자 처리
+          is_superuser: result.is_superuser === true || result.is_superuser === 'true' || result.is_superuser === 1,  // boolean, 문자열, 숫자 처리
+        }
+        console.log('💾 사용자 정보 저장:', userInfo)
+        console.log('👤 관리자 여부:', { is_staff: userInfo.is_staff, is_superuser: userInfo.is_superuser })
+        console.log('📦 원본 응답:', { is_staff: result.is_staff, is_superuser: result.is_superuser })
+        localStorage.setItem('user_info', JSON.stringify(userInfo))
+        
         // 인증 상태 변경 이벤트 발생 (약간의 지연을 추가하여 React 상태 업데이트 확인)
         setTimeout(() => {
           window.dispatchEvent(new Event('auth-state-change'))
         }, 100)
         
         toast.success('로그인 성공!')
-        router.push('/map')
+        
+        // 관리자인 경우 관리자 페이지로, 일반 사용자는 지도 페이지로 이동
+        if (userInfo.is_staff || userInfo.is_superuser) {
+          router.push('/admin')
+        } else {
+          router.push('/map')
+        }
       }
     } catch (error: any) {
       console.error('Login error:', error)

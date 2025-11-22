@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import DataSourceCard from '@/components/admin/DataSourceCard'
 import APITestPanel from '@/components/admin/APITestPanel'
-import AdminAuth from '@/components/admin/AdminAuth'
 import ToastContainer, { ToastMessage } from '@/components/admin/Toast'
+import { useAuth } from '@/hooks/useAuth'
 import DataPipelinePanel from '@/components/admin/DataPipelinePanel'
 import APIEndpointsPanel from '@/components/admin/APIEndpointsPanel'
 import AdminOverviewTab from '@/components/admin/AdminOverviewTab'
@@ -20,8 +21,11 @@ import {
 } from '@/types/admin'
 
 export default function AdminPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const router = useRouter()
+  const { isAuthenticated, isAdmin, isLoading, logout } = useAuth()
   const [activeTab, setActiveTab] = useState('overview')
+  const [isRedirecting, setIsRedirecting] = useState(false)  // 리다이렉트 중 플래그
+  const hasRedirected = useRef(false)  // 리다이렉트 실행 여부 추적 (무한 루프 방지)
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null)
   const [dataSources, setDataSources] = useState<DataSource[]>([])
   const [processingLogs, setProcessingLogs] = useState<ProcessingLog[]>([])
@@ -290,16 +294,42 @@ export default function AdminPage() {
     }
   }
 
+  // 인증 및 관리자 권한 확인 (useEffect에서만 상태 변경)
   useEffect(() => {
-    const authenticated = localStorage.getItem('admin_authenticated')
-    if (authenticated === 'true') {
-      setIsAuthenticated(true)
+    console.log('🔒 관리자 페이지 접근 확인:', { isAuthenticated, isAdmin, isLoading, isRedirecting, hasRedirected: hasRedirected.current })
+    
+    // 로딩이 완료되면 즉시 체크
+    if (!isLoading) {
+      // 인증되지 않았거나 관리자가 아닌 경우 즉시 로그인 페이지로 리다이렉트
+      if (!isAuthenticated || !isAdmin) {
+        if (!hasRedirected.current) {
+          console.log('❌ 접근 거부 - 로그인 페이지로 리다이렉트', { isAuthenticated, isAdmin })
+          hasRedirected.current = true
+          setIsRedirecting(true)
+          // 즉시 리다이렉트
+          window.location.href = '/auth/login'
+        }
+        return
+      }
+      
+      console.log('✅ 관리자 권한 확인됨')
+      // 관리자 권한이 확인되면 리다이렉트 플래그 해제
+      if (isRedirecting) {
+        setIsRedirecting(false)
+      }
+      // 관리자 권한이 확인되면 리다이렉트 플래그 초기화
+      hasRedirected.current = false
+    } else {
+      // 로딩 중일 때는 리다이렉트 플래그 초기화하지 않음
+      console.log('⏳ 인증 상태 확인 중...')
     }
-  }, [])
+  }, [isAuthenticated, isAdmin, isLoading, isRedirecting])
 
+  // 데이터 로딩 (인증 및 관리자 권한 확인 후에만 실행)
   useEffect(() => {
-    if (isAuthenticated) {
-      console.log('인증 완료, 데이터 로딩 시작...')
+    // 로딩이 완료되고, 인증되었고, 관리자이며, 리다이렉트 중이 아닐 때만 데이터 로딩
+    if (!isLoading && isAuthenticated && isAdmin && !isRedirecting) {
+      console.log('✅ 인증 완료, 데이터 로딩 시작...')
       const loadData = async () => {
         try {
           await Promise.all([
@@ -309,18 +339,33 @@ export default function AdminPage() {
             fetchDataQuality(),
             fetchCollectionStats()
           ])
-          console.log('모든 데이터 로딩 완료')
+          console.log('✅ 모든 데이터 로딩 완료')
         } catch (error) {
-          console.error('데이터 로딩 중 오류:', error)
+          console.error('❌ 데이터 로딩 중 오류:', error)
         }
       }
       loadData()
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, isAdmin, isLoading, isRedirecting])
 
-  // 인증되지 않은 경우 로그인 페이지 표시
-  if (!isAuthenticated) {
-    return <AdminAuth onAuthenticated={() => setIsAuthenticated(true)} />
+  // 로딩 중이거나 리다이렉트 중이거나 인증되지 않았거나 관리자가 아닌 경우
+  // 모든 조건을 만족해야만 페이지 렌더링
+  // 주의: 모든 훅은 조건부 렌더링 전에 호출되어야 함
+  if (isLoading || isRedirecting || !isAuthenticated || !isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="loading-spinner mx-auto mb-4" />
+          <p className="text-gray-600">
+            {isLoading 
+              ? '로딩 중...' 
+              : isRedirecting 
+                ? '리다이렉트 중...' 
+                : '접근 권한 확인 중...'}
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -334,8 +379,8 @@ export default function AdminPage() {
             <div className="flex items-center space-x-4">
               <button
                 onClick={() => {
-                  localStorage.removeItem('admin_authenticated')
-                  setIsAuthenticated(false)
+                  logout()
+                  router.push('/auth/login')
                 }}
                 className="text-sm text-gray-600 hover:text-gray-900 px-3 py-1 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
               >

@@ -2,24 +2,36 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '@/hooks/useAuth'
 import { useRouter } from 'next/navigation'
 
-const navigation = [
+// 기본 네비게이션 항목 (관리자 링크 제외)
+const baseNavigation = [
   { name: '홈', href: '/' },
   { name: '지도', href: '/map' },
   { name: '공지사항', href: '/notice' },
   { name: '소개', href: '/about' },
-  { name: '관리자', href: '/admin' },
 ]
 
 export default function Navbar() {
   const pathname = usePathname()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { isAuthenticated, user, logout } = useAuth()
+  const { isAuthenticated, user, isAdmin, isLoading, logout } = useAuth()
   const router = useRouter()
+  
+  // 디버깅: 관리자 상태 확인
+  useEffect(() => {
+    if (!isLoading) {
+      console.log('🧭 Navbar - 관리자 상태:', { isAdmin, isAuthenticated, user: user ? { id: user.id, username: user.username, is_staff: user.is_staff, is_superuser: user.is_superuser } : null })
+    }
+  }, [isAdmin, isAuthenticated, user, isLoading])
+  
+  // 관리자일 때만 관리자 링크 추가
+  const navigation = (isAdmin && isAuthenticated)
+    ? [...baseNavigation, { name: '관리자', href: '/admin' }]
+    : baseNavigation
 
   const handleLogout = () => {
     logout()

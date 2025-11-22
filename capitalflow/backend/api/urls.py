@@ -23,6 +23,7 @@ urlpatterns = [
     # Authentication
     path('auth/register/', views.register_user, name='register'),
     path('auth/login/', views.login_user, name='login'),
+    path('auth/me/', views.get_current_user, name='current_user'),  # 현재 사용자 정보
     path('auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     

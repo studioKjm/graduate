@@ -39,6 +39,8 @@ def register_user(request):
             'user_id': user.id,
             'username': user.username,
             'email': user.email,
+            'is_staff': user.is_staff,  # 관리자 여부 추가
+            'is_superuser': user.is_superuser,  # 슈퍼유저 여부 추가
             'refresh': str(refresh),
             'access': str(refresh.access_token),
         }, status=status.HTTP_201_CREATED)
@@ -59,6 +61,8 @@ def login_user(request):
             'user_id': user.id,
             'username': user.username,
             'email': user.email,
+            'is_staff': user.is_staff,  # 관리자 여부 추가
+            'is_superuser': user.is_superuser,  # 슈퍼유저 여부 추가
             'refresh': str(refresh),
             'access': str(refresh.access_token),
         })
@@ -66,6 +70,20 @@ def login_user(request):
         {'error': 'Invalid credentials'}, 
         status=status.HTTP_401_UNAUTHORIZED
     )
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def get_current_user(request):
+    """Get current authenticated user information."""
+    user = request.user
+    return Response({
+        'user_id': user.id,
+        'username': user.username,
+        'email': user.email,
+        'is_staff': user.is_staff,
+        'is_superuser': user.is_superuser,
+    })
 
 
 class CountryViewSet(viewsets.ReadOnlyModelViewSet):
