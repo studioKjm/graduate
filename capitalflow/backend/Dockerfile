@@ -42,7 +42,9 @@ EXPOSE 8000
 # HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 #     CMD curl -f http://localhost:${PORT:-8000}/api/v1/ || exit 1
 
-# Gunicorn 실행
-# Render는 $PORT 환경 변수를 제공하므로 이를 사용
-# 기본값으로 8000을 사용하지만, Render에서는 $PORT를 사용
-CMD sh -c "gunicorn --bind 0.0.0.0:${PORT:-8000} --workers 2 --threads 2 --timeout 60 capitalflow.wsgi:application"
+# 스크립트에 실행 권한 부여
+RUN chmod +x render_start.sh
+
+# Render 시작 스크립트 실행
+# 이 스크립트는 마이그레이션, 정적 파일 수집, 슈퍼유저 생성을 자동으로 수행합니다
+CMD ["bash", "render_start.sh"]
