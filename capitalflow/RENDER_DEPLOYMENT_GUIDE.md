@@ -170,7 +170,18 @@ node_modules/
   - 프로젝트 루트가 아닌 backend 디렉토리를 지정해야 합니다
 
 #### 빌드 및 실행 설정
+
+**⚠️ 중요: Environment 선택**
+
+Render에서 두 가지 옵션이 있습니다:
+
+##### 옵션 1: Python 3 선택 (초보자 추천) ⭐
+
 - **Environment**: `Python 3` 선택
+- **장점**: 
+  - 설정이 간단함
+  - 가이드와 일치
+  - Render가 자동으로 Python 환경 구성
 - **Build Command**: 
   ```bash
   pip install -r requirements.txt && python manage.py collectstatic --noinput
@@ -180,6 +191,47 @@ node_modules/
   gunicorn --bind 0.0.0.0:$PORT capitalflow.wsgi:application
   ```
   - ⚠️ `$PORT`는 Render가 자동으로 제공하는 환경 변수입니다
+
+##### 옵션 2: Docker 선택 (고급 사용자용) 🐳
+
+- **Environment**: `Docker` 선택
+- **장점**: 
+  - 더 세밀한 제어 가능
+  - 로컬 환경과 동일한 환경 구성
+  - 시스템 패키지 설치 등 커스터마이징 가능
+- **단점**: 
+  - 설정이 조금 더 복잡함
+  - 빌드 시간이 더 걸릴 수 있음
+
+**Docker 설정 방법**:
+
+1. **Dockerfile 경로 확인**:
+   - Render는 `Root Directory` 기준으로 Dockerfile을 찾습니다
+   - `Root Directory`가 `capitalflow/backend`로 설정되어 있다면
+   - Dockerfile은 `capitalflow/backend/Dockerfile`에 있어야 합니다
+   - ✅ 이미 생성되어 있습니다!
+
+2. **Build Command**: 
+   - (비워두기 또는 자동 감지)
+   - Render가 자동으로 `docker build`를 실행합니다
+
+3. **Start Command**: 
+   - (비워두기)
+   - Dockerfile의 `CMD`가 자동으로 사용됩니다
+
+4. **Dockerfile 확인사항**:
+   - ✅ `Dockerfile`이 `$PORT` 환경 변수를 사용하도록 설정됨
+   - ✅ Health check 포함
+   - ✅ 최적화된 멀티스테이지 빌드 (필요시)
+
+**⚠️ 중요**: 
+- Docker를 선택하면 `Build Command`와 `Start Command`를 **비워두세요**
+- Render가 자동으로 Dockerfile을 사용합니다
+- Dockerfile은 이미 Render 배포에 최적화되어 있습니다
+
+**Docker 선택 시 추가 설정 불필요**: 
+- Dockerfile이 이미 Render의 `$PORT` 환경 변수를 사용하도록 설정되어 있습니다
+- `.dockerignore` 파일도 생성되어 불필요한 파일이 제외됩니다
 
 #### 플랜 선택
 - **Plan**: **Free** 선택
@@ -462,13 +514,21 @@ exit
 1. **"Logs"** 탭에서 에러 메시지 확인
 2. 일반적인 원인:
    - `requirements.txt`에 패키지가 없음 → 추가
-   - Python 버전 불일치 → `runtime.txt` 파일 생성
+   - Python 버전 불일치 → `runtime.txt` 파일 생성 (Python 3 선택 시)
    - 빌드 명령어 오류 → 수정
+   - Docker 빌드 실패 → Dockerfile 문법 확인 (Docker 선택 시)
 
-**예시 - runtime.txt 생성**:
+**Python 3 선택 시 - runtime.txt 생성**:
 ```bash
 # backend/runtime.txt 파일 생성
 python-3.11.0
+```
+
+**Docker 선택 시 - 로컬 테스트**:
+```bash
+# 로컬에서 Docker 빌드 테스트
+cd capitalflow/backend
+docker build -t capitalflow-test .
 ```
 
 ### 문제 2: 데이터베이스 연결 실패
