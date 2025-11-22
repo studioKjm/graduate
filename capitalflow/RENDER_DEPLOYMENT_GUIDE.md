@@ -171,37 +171,15 @@ node_modules/
 
 #### 빌드 및 실행 설정
 
-**⚠️ 중요: Environment 선택**
+**⚠️ 중요: Docker 사용**
 
-Render에서 두 가지 옵션이 있습니다:
-
-##### 옵션 1: Python 3 선택 (초보자 추천) ⭐
-
-- **Environment**: `Python 3` 선택
-- **장점**: 
-  - 설정이 간단함
-  - 가이드와 일치
-  - Render가 자동으로 Python 환경 구성
-- **Build Command**: 
-  ```bash
-  pip install -r requirements.txt && python manage.py collectstatic --noinput
-  ```
-- **Start Command**: 
-  ```bash
-  gunicorn --bind 0.0.0.0:$PORT capitalflow.wsgi:application
-  ```
-  - ⚠️ `$PORT`는 Render가 자동으로 제공하는 환경 변수입니다
-
-##### 옵션 2: Docker 선택 (고급 사용자용) 🐳
+이 프로젝트는 **Docker**를 사용하여 배포합니다.
 
 - **Environment**: `Docker` 선택
 - **장점**: 
-  - 더 세밀한 제어 가능
   - 로컬 환경과 동일한 환경 구성
-  - 시스템 패키지 설치 등 커스터마이징 가능
-- **단점**: 
-  - 설정이 조금 더 복잡함
-  - 빌드 시간이 더 걸릴 수 있음
+  - 시스템 패키지 설치 등 세밀한 제어 가능
+  - 재현 가능한 배포 환경
 
 **Docker 설정 방법**:
 
@@ -212,7 +190,7 @@ Render에서 두 가지 옵션이 있습니다:
    - ✅ 이미 생성되어 있습니다!
 
 2. **Build Command**: 
-   - (비워두기 또는 자동 감지)
+   - (비워두기)
    - Render가 자동으로 `docker build`를 실행합니다
 
 3. **Start Command**: 
@@ -222,16 +200,12 @@ Render에서 두 가지 옵션이 있습니다:
 4. **Dockerfile 확인사항**:
    - ✅ `Dockerfile`이 `$PORT` 환경 변수를 사용하도록 설정됨
    - ✅ Health check 포함
-   - ✅ 최적화된 멀티스테이지 빌드 (필요시)
+   - ✅ 마이그레이션 자동 실행 스크립트 포함
 
 **⚠️ 중요**: 
-- Docker를 선택하면 `Build Command`와 `Start Command`를 **비워두세요**
+- Docker를 사용하므로 `Build Command`와 `Start Command`를 **비워두세요**
 - Render가 자동으로 Dockerfile을 사용합니다
 - Dockerfile은 이미 Render 배포에 최적화되어 있습니다
-
-**Docker 선택 시 추가 설정 불필요**: 
-- Dockerfile이 이미 Render의 `$PORT` 환경 변수를 사용하도록 설정되어 있습니다
-- `.dockerignore` 파일도 생성되어 불필요한 파일이 제외됩니다
 
 #### 플랜 선택
 - **Plan**: **Free** 선택
@@ -339,8 +313,8 @@ Render에서 두 가지 옵션이 있습니다:
   ```bash
   npm install && npm run build
   ```
-- **Publish Directory**: `.next`
-  - ⚠️ Next.js의 기본 출력 디렉토리입니다
+- **Publish Directory**: `out`
+  - ⚠️ `next.config.js`에 `output: 'export'` 설정이 있어 정적 파일이 `out` 디렉토리에 생성됩니다
 
 #### 플랜 선택
 - **Plan**: **Free** 선택
@@ -391,24 +365,50 @@ Render의 무료 플랜에서는 Shell 기능이 제한될 수 있습니다. 아
 
 Shell 없이 자동으로 마이그레이션과 슈퍼유저 생성을 수행합니다.
 
-#### 7-1-1. Start Command 수정
+#### 7-1-1. Dockerfile 설정 확인
 
+**⚠️ 중요: Docker 사용**
+
+이 프로젝트는 Docker를 사용하므로, **Render 대시보드에 Start Command 항목이 없습니다**. 대신 **Dockerfile의 CMD**가 Start Command 역할을 합니다.
+
+**확인 방법**:
 1. Render 대시보드 → `capitalflow-backend` 서비스 → **Settings** 탭
-2. **Start Command** 찾기
-3. 현재 값:
-   ```bash
-   gunicorn --bind 0.0.0.0:$PORT capitalflow.wsgi:application
+2. **Environment** 섹션에서 `Docker`로 표시되어 있는지 확인
+
+**설정 방법**:
+1. `capitalflow/backend/Dockerfile` 파일 확인
+2. 파일 끝부분에 다음이 있는지 확인:
+   ```dockerfile
+   # 스크립트에 실행 권한 부여
+   RUN chmod +x render_start.sh
+   
+   # Render 시작 스크립트 실행
+   CMD ["bash", "render_start.sh"]
    ```
-4. **변경할 값**:
-   ```bash
-   bash render_start.sh
+3. 이미 설정되어 있다면 **추가 작업 불필요** ✅
+4. 없다면 Dockerfile 마지막 줄에 추가:
+   ```dockerfile
+   # 스크립트에 실행 권한 부여
+   RUN chmod +x render_start.sh
+   
+   # Render 시작 스크립트 실행
+   # 이 스크립트는 마이그레이션, 정적 파일 수집, 슈퍼유저 생성을 자동으로 수행합니다
+   CMD ["bash", "render_start.sh"]
    ```
-5. **Save Changes** 클릭
-6. 자동으로 재배포됩니다
+5. 변경사항을 Git에 커밋 및 푸시:
+   ```bash
+   git add backend/Dockerfile
+   git commit -m "Update: Dockerfile에서 render_start.sh 사용"
+   git push origin main
+   ```
+6. Render가 자동으로 재배포합니다
+
+**✅ 현재 상태**: Dockerfile이 이미 올바르게 설정되어 있습니다!
 
 **`render_start.sh` 스크립트가 자동으로 수행하는 작업**:
 - ✅ 데이터베이스 마이그레이션 (`python manage.py migrate`)
 - ✅ 정적 파일 수집 (`python manage.py collectstatic`)
+- ✅ 슈퍼유저 자동 생성 (환경 변수 설정 시)
 - ✅ Gunicorn 서버 시작
 
 #### 7-1-2. 슈퍼유저 자동 생성 (선택사항)
@@ -424,16 +424,10 @@ Shell 없이 자동으로 마이그레이션과 슈퍼유저 생성을 수행합
 
 **슈퍼유저 생성 스크립트 실행**:
 
-`render_start.sh`를 수정하여 슈퍼유저 생성도 포함시킬 수 있습니다:
-
+`render_start.sh`에 이미 슈퍼유저 생성이 포함되어 있습니다:
 ```bash
-# render_start.sh에 추가
-python create_superuser_if_needed.py
-```
-
-또는 Build Command에 추가:
-```bash
-pip install -r requirements.txt && python manage.py collectstatic --noinput && python create_superuser_if_needed.py
+# render_start.sh에 이미 포함됨
+python create_superuser_if_needed.py || true
 ```
 
 **⚠️ 보안 주의사항**:
@@ -442,24 +436,6 @@ pip install -r requirements.txt && python manage.py collectstatic --noinput && p
 - 코드에 비밀번호를 하드코딩하지 마세요
 
 ---
-
-### 방법 2: Build Command에 마이그레이션 추가 (대안)
-
-Start Command를 수정하지 않고 Build Command에 마이그레이션을 추가할 수도 있습니다.
-
-1. Render 대시보드 → `capitalflow-backend` 서비스 → **Settings** 탭
-2. **Build Command** 찾기
-3. 현재 값:
-   ```bash
-   pip install -r requirements.txt && python manage.py collectstatic --noinput
-   ```
-4. **변경할 값**:
-   ```bash
-   pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate --noinput
-   ```
-5. **Save Changes** 클릭
-
-**⚠️ 주의**: 이 방법은 빌드 시마다 마이그레이션이 실행되므로, 빌드 시간이 약간 더 걸릴 수 있습니다.
 
 ---
 
@@ -581,21 +557,15 @@ exit
 1. **"Logs"** 탭에서 에러 메시지 확인
 2. 일반적인 원인:
    - `requirements.txt`에 패키지가 없음 → 추가
-   - Python 버전 불일치 → `runtime.txt` 파일 생성 (Python 3 선택 시)
-   - 빌드 명령어 오류 → 수정
-   - Docker 빌드 실패 → Dockerfile 문법 확인 (Docker 선택 시)
+   - Docker 빌드 실패 → Dockerfile 문법 확인
+   - Dockerfile 경로 오류 → Root Directory 확인
 
-**Python 3 선택 시 - runtime.txt 생성**:
-```bash
-# backend/runtime.txt 파일 생성
-python-3.11.0
-```
-
-**Docker 선택 시 - 로컬 테스트**:
+**로컬에서 Docker 빌드 테스트**:
 ```bash
 # 로컬에서 Docker 빌드 테스트
 cd capitalflow/backend
 docker build -t capitalflow-test .
+docker run -p 8000:8000 -e PORT=8000 capitalflow-test
 ```
 
 ### 문제 2: 데이터베이스 연결 실패
@@ -623,13 +593,10 @@ docker build -t capitalflow-test .
 **증상**: CSS, JS 파일이 로드되지 않음
 
 **해결 방법**:
-1. `collectstatic`이 실행되었는지 확인
+1. `collectstatic`이 실행되었는지 확인 (Dockerfile과 render_start.sh에 포함됨)
 2. `STATIC_ROOT` 설정 확인
 3. WhiteNoise 미들웨어가 활성화되었는지 확인
-4. Shell에서 수동 실행:
-   ```bash
-   python manage.py collectstatic --noinput
-   ```
+4. 로그에서 `📁 정적 파일 수집 중...` 메시지 확인
 
 ### 문제 5: 첫 요청이 매우 느림
 
@@ -651,10 +618,7 @@ docker build -t capitalflow-test .
 1. 환경 변수 이름 확인 (대소문자 구분)
 2. **"Save Changes"** 버튼을 클릭했는지 확인
 3. 재배포가 필요할 수 있음 (자동 재배포 또는 수동 재배포)
-4. Shell에서 확인:
-   ```bash
-   echo $SECRET_KEY
-   ```
+4. 로그에서 환경 변수 관련 에러 확인
 
 ### 문제 7: 500 Internal Server Error
 
@@ -664,12 +628,10 @@ docker build -t capitalflow-test .
 1. **"Logs"** 탭에서 에러 메시지 확인
 2. 일반적인 원인:
    - `SECRET_KEY`가 설정되지 않음
-   - 데이터베이스 마이그레이션 미실행
+   - 데이터베이스 마이그레이션 미실행 (render_start.sh 확인)
    - 필수 환경 변수 누락
-3. Shell에서 Django 체크:
-   ```bash
-   python manage.py check --deploy
-   ```
+3. 로그에서 마이그레이션 실행 여부 확인:
+   - `📦 데이터베이스 마이그레이션 실행 중...` 메시지 확인
 
 ---
 
@@ -716,10 +678,11 @@ docker build -t capitalflow-test .
 - 자동 백업이 제한적일 수 있음
 
 **수동 백업 방법**:
-```bash
-# Shell에서 실행
-python manage.py dumpdata > backup.json
-```
+- 로컬에서 Django management command 사용:
+  ```bash
+  python manage.py dumpdata > backup.json
+  ```
+- 또는 Render의 PostgreSQL 백업 기능 사용 (유료 플랜)
 
 **실무 권장사항**:
 - 정기적으로 데이터 백업
