@@ -381,26 +381,103 @@ Render에서 두 가지 옵션이 있습니다:
 
 ## 7. 마이그레이션 및 초기 설정
 
-### 7-1. Shell 접속
+### ⚠️ 중요: Shell 기능이 유료인 경우
+
+Render의 무료 플랜에서는 Shell 기능이 제한될 수 있습니다. 아래 **방법 1 (자동화)**을 사용하세요.
+
+---
+
+### 방법 1: 자동화 스크립트 사용 (권장) ⭐
+
+Shell 없이 자동으로 마이그레이션과 슈퍼유저 생성을 수행합니다.
+
+#### 7-1-1. Start Command 수정
+
+1. Render 대시보드 → `capitalflow-backend` 서비스 → **Settings** 탭
+2. **Start Command** 찾기
+3. 현재 값:
+   ```bash
+   gunicorn --bind 0.0.0.0:$PORT capitalflow.wsgi:application
+   ```
+4. **변경할 값**:
+   ```bash
+   bash render_start.sh
+   ```
+5. **Save Changes** 클릭
+6. 자동으로 재배포됩니다
+
+**`render_start.sh` 스크립트가 자동으로 수행하는 작업**:
+- ✅ 데이터베이스 마이그레이션 (`python manage.py migrate`)
+- ✅ 정적 파일 수집 (`python manage.py collectstatic`)
+- ✅ Gunicorn 서버 시작
+
+#### 7-1-2. 슈퍼유저 자동 생성 (선택사항)
+
+환경 변수를 통해 슈퍼유저를 자동으로 생성할 수 있습니다.
+
+1. Render 대시보드 → `capitalflow-backend` 서비스 → **Environment** 탭
+2. 다음 환경 변수 추가:
+   - **DJANGO_SUPERUSER_USERNAME**: 관리자 사용자명 (예: `admin`)
+   - **DJANGO_SUPERUSER_PASSWORD**: 관리자 비밀번호 (강력한 비밀번호 사용)
+   - **DJANGO_SUPERUSER_EMAIL**: 관리자 이메일 (선택사항)
+3. **Save Changes** 클릭
+
+**슈퍼유저 생성 스크립트 실행**:
+
+`render_start.sh`를 수정하여 슈퍼유저 생성도 포함시킬 수 있습니다:
+
+```bash
+# render_start.sh에 추가
+python create_superuser_if_needed.py
+```
+
+또는 Build Command에 추가:
+```bash
+pip install -r requirements.txt && python manage.py collectstatic --noinput && python create_superuser_if_needed.py
+```
+
+**⚠️ 보안 주의사항**:
+- 슈퍼유저 비밀번호는 강력하게 설정하세요
+- 환경 변수는 Render 대시보드에서만 관리하세요
+- 코드에 비밀번호를 하드코딩하지 마세요
+
+---
+
+### 방법 2: Build Command에 마이그레이션 추가 (대안)
+
+Start Command를 수정하지 않고 Build Command에 마이그레이션을 추가할 수도 있습니다.
+
+1. Render 대시보드 → `capitalflow-backend` 서비스 → **Settings** 탭
+2. **Build Command** 찾기
+3. 현재 값:
+   ```bash
+   pip install -r requirements.txt && python manage.py collectstatic --noinput
+   ```
+4. **변경할 값**:
+   ```bash
+   pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate --noinput
+   ```
+5. **Save Changes** 클릭
+
+**⚠️ 주의**: 이 방법은 빌드 시마다 마이그레이션이 실행되므로, 빌드 시간이 약간 더 걸릴 수 있습니다.
+
+---
+
+### 방법 3: Shell 사용 (유료 플랜)
+
+Render의 유료 플랜을 사용하는 경우 Shell 기능을 사용할 수 있습니다.
+
+#### 7-3-1. Shell 접속
 
 1. 백엔드 서비스 페이지로 이동
 2. 상단 메뉴에서 **"Shell"** 탭 클릭
 3. **"Connect"** 버튼 클릭하여 터미널 접속
 
-### 7-2. 데이터베이스 마이그레이션
+#### 7-3-2. 데이터베이스 마이그레이션
 
 Shell에서 다음 명령어 실행:
 
 ```bash
-# 현재 디렉토리 확인
-pwd
-
-# backend 디렉토리로 이동 (Root Directory가 backend로 설정되어 있다면 이미 여기 있음)
-cd /opt/render/project/src
-
-# 또는
-cd /app
-
 # 마이그레이션 실행
 python manage.py migrate
 ```
@@ -415,7 +492,7 @@ Running migrations:
   ...
 ```
 
-### 7-3. 슈퍼유저 생성
+#### 7-3-3. 슈퍼유저 생성
 
 관리자 계정을 생성합니다:
 
@@ -431,17 +508,7 @@ python manage.py createsuperuser
 
 **중요**: 비밀번호는 화면에 표시되지 않습니다 (정상입니다)
 
-### 7-4. 정적 파일 수집 확인
-
-마이그레이션과 함께 `collectstatic`도 실행되었는지 확인:
-
-```bash
-python manage.py collectstatic --noinput
-```
-
-이미 빌드 과정에서 실행되었을 수 있습니다.
-
-### 7-5. Shell 종료
+#### 7-3-4. Shell 종료
 
 ```bash
 exit
