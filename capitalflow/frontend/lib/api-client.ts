@@ -115,6 +115,14 @@ class ApiClient {
 
       return response
     } catch (error: any) {
+      // 에러 상세 로깅
+      console.error('❌ [API] Request failed:', {
+        url: fullUrl,
+        error: error.message,
+        errorType: error.name,
+        stack: error.stack
+      })
+      
       // 401 에러는 재시도하지 않음
       if (error.message?.includes('401')) {
         throw error
@@ -122,7 +130,7 @@ class ApiClient {
       
       // 타임아웃 또는 네트워크 에러만 재시도
       if (retries > 0) {
-        console.warn(`Request failed, retrying... (${retries} attempts left)`)
+        console.warn(`⚠️ [API] Request failed, retrying... (${retries} attempts left)`)
         await new Promise((resolve) => setTimeout(resolve, 1000)) // 1초 대기
         return this.fetchWithTimeout(url, { ...options, retries: retries - 1 })
       }

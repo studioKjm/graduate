@@ -52,10 +52,12 @@ export default function NoLoadingYearMap({
       if (sector) params.append('sector', sector)
       params.append('year', year.toString())
       // capital_types는 배열로 전달 (백엔드에서 getlist로 받음)
-        capitalTypes.forEach(type => params.append('capital_types', type))
+      capitalTypes.forEach(type => params.append('capital_types', type))
       
       const url = `/api/v1/visualization/map-data/?${params.toString()}`
-      console.log(`🌐 Fetching from: ${url}`)
+      console.log(`🌐 [API] Fetching from: ${url}`)
+      console.log(`🌐 [API] Full URL will be: ${apiClient['baseURL']}${url}`)
+      console.log(`🌐 [API] Parameters:`, { year, sector, capitalTypes })
       
       // 실제 데이터만 사용하므로 재시도 로직 제거 (더미 데이터 방지)
       // 백엔드 서버가 없으면 즉시 실패하여 에러 메시지 표시
@@ -389,13 +391,37 @@ export default function NoLoadingYearMap({
       try {
         // 1. GeoJSON 로딩
         console.log('📍 [GEOJSON] Loading GeoJSON...')
-        const geoResponse = await fetch('/world-countries-detailed.json')
-        if (!geoResponse.ok) {
-          throw new Error(`Failed to load GeoJSON: ${geoResponse.status}`)
+        // Next.js static export에서는 public 폴더의 파일이 루트에 복사됨
+        // 여러 경로를 시도
+        let geoResponse: Response | null = null
+        const geoPaths = [
+          '/world-countries-detailed.json',
+          './world-countries-detailed.json',
+          'world-countries-detailed.json'
+        ]
+        
+        for (const path of geoPaths) {
+          try {
+            geoResponse = await fetch(path)
+            if (geoResponse.ok) {
+              console.log(`✅ [GEOJSON] Found at: ${path}`)
+              break
+            }
+          } catch (error) {
+            console.warn(`⚠️ [GEOJSON] Failed to load from ${path}:`, error)
+            continue
+          }
         }
-        const worldData = await geoResponse.json()
-        setMapData(worldData)
-        console.log('✅ [GEOJSON] GeoJSON loaded successfully, features:', worldData.features?.length || 0)
+        
+        if (!geoResponse || !geoResponse.ok) {
+          console.error('❌ [GEOJSON] All paths failed, using fallback')
+          // GeoJSON 로드 실패해도 지도는 표시할 수 있도록 에러만 기록
+          setError('GeoJSON 파일을 불러올 수 없습니다. 지도 표시가 제한될 수 있습니다.')
+        } else {
+          const worldData = await geoResponse.json()
+          setMapData(worldData)
+          console.log('✅ [GEOJSON] GeoJSON loaded successfully, features:', worldData.features?.length || 0)
+        }
 
         // 2. 모든 연도 데이터를 병렬로 로딩 (1995-2024)
         console.log('📊 [DATA] Loading all years data in parallel...')
