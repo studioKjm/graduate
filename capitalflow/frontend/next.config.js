@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Render Static Site 배포를 위한 정적 export 설정
+  output: 'export',
   reactStrictMode: true,
   swcMinify: true,
   poweredByHeader: false,
