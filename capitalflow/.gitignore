@@ -110,3 +110,16 @@ dmypy.json
 !**/next.config.js
 !next-env.d.ts
 !**/next-env.d.ts
+# Frontend source directories (must be tracked)
+!frontend/lib/
+!frontend/lib/**
+!frontend/types/
+!frontend/types/**
+!frontend/utils/
+!frontend/utils/**
+!frontend/components/
+!frontend/components/**
+!frontend/hooks/
+!frontend/hooks/**
+!frontend/app/
+!frontend/app/**
