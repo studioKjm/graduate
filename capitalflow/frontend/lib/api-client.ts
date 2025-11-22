@@ -12,15 +12,17 @@ class ApiClient {
 
   constructor() {
     // 환경 변수에서 백엔드 URL 가져오기
-    // 주의: LOG 출력에서 baseURL이 /api/v1을 포함한다는 것은 .env 파일에 잘못 설정되어 있다는 뜻
+    // NEXT_PUBLIC_API_URL은 전체 API URL을 포함해야 함 (예: https://backend.onrender.com/api/v1)
     let envURL = process.env.NEXT_PUBLIC_API_URL || ''
     
-    // .env 파일에서 /api/v1을 제거 (잘못된 설정이 있을 경우)
-    if (envURL.includes('/api/v1')) {
-      envURL = envURL.replace('/api/v1', '').replace(/\/+$/, '')
+    // 환경 변수가 설정되지 않은 경우 기본값 사용
+    if (!envURL) {
+      // 개발 환경 기본값
+      envURL = 'http://localhost:8001/api/v1'
     }
     
-    this.baseURL = envURL || 'http://localhost:8001'
+    // baseURL은 API의 기본 경로를 포함 (예: https://backend.onrender.com/api/v1)
+    this.baseURL = envURL.replace(/\/+$/, '') // 끝의 슬래시 제거
     
     console.log('🔧 ApiClient initialized with baseURL:', this.baseURL)
   }
