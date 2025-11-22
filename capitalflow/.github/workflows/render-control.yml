@@ -1,0 +1,45 @@
+name: Render Remote Control
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: '실행할 작업'
+        required: true
+        type: choice
+        options:
+          - migrate
+          - createsuperuser
+          - collectstatic
+          - deploy
+        default: 'migrate'
+      service_id:
+        description: 'Render 서비스 ID (선택사항)'
+        required: false
+        type: string
+
+jobs:
+  render-control:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Execute action
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          ACTION: ${{ github.event.inputs.action }}
+          SERVICE_ID: ${{ github.event.inputs.service_id }}
+        run: |
+          python .github/scripts/render_control.py
+
