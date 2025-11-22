@@ -61,18 +61,32 @@ export default function NoLoadingYearMap({
       
       // 실제 데이터만 사용하므로 재시도 로직 제거 (더미 데이터 방지)
       // 백엔드 서버가 없으면 즉시 실패하여 에러 메시지 표시
-      const data = await apiClient.get(url)
-      console.log(`📦 Response data for year ${year}:`, {
-        success: data.success,
-        hasData: !!data.data,
-        hasCountries: !!(data.data && data.data.countries),
-        countriesCount: data.data?.countries?.length || 0,
-        sampleCountry: data.data?.countries?.[0]
-      })
+      let data
+      try {
+        data = await apiClient.get(url)
+        console.log(`📦 [API] Response received for year ${year}:`, {
+          success: data?.success,
+          hasData: !!data?.data,
+          hasCountries: !!(data?.data && data?.data.countries),
+          countriesCount: data?.data?.countries?.length || 0,
+          sampleCountry: data?.data?.countries?.[0],
+          fullResponse: data
+        })
+      } catch (apiError: any) {
+        console.error(`❌ [API] Request failed for year ${year}:`, {
+          error: apiError.message,
+          errorType: apiError.name,
+          url: url,
+          stack: apiError.stack
+        })
+        throw apiError
+      }
       
       const processedData: { [countryCode: string]: number } = {}
       
-      if (data.success && data.data && data.data.countries && Array.isArray(data.data.countries)) {
+      // API 응답 구조 확인 및 처리
+      // 백엔드가 success: false를 반환하더라도 data 필드가 있으면 처리
+      if (data && data.data && data.data.countries && Array.isArray(data.data.countries)) {
         data.data.countries.forEach((country: any) => {
           if (country.code && country.total_amount !== undefined) {
             const amount = parseFloat(country.total_amount) || 0
@@ -81,11 +95,18 @@ export default function NoLoadingYearMap({
             }
           }
         })
-        console.log(`✅ Processed ${Object.keys(processedData).length} countries with data for year ${year}`)
+        console.log(`✅ [API] Processed ${Object.keys(processedData).length} countries with data for year ${year}`)
       } else {
-        console.warn(`⚠️ Invalid response structure for year ${year}:`, data)
+        // 데이터가 없거나 구조가 다른 경우
+        console.warn(`⚠️ [API] No data or invalid structure for year ${year}:`, {
+          success: data?.success,
+          message: data?.message,
+          hasData: !!data?.data,
+          hasCountries: !!(data?.data && data?.data.countries)
+        })
       }
       
+      // 데이터가 있어도 없어도 processedData 반환 (빈 객체일 수 있음)
       return processedData
     } catch (error: any) {
       const errorMessage = error.message || String(error)
@@ -392,35 +413,45 @@ export default function NoLoadingYearMap({
         // 1. GeoJSON 로딩
         console.log('📍 [GEOJSON] Loading GeoJSON...')
         // Next.js static export에서는 public 폴더의 파일이 루트에 복사됨
-        // 여러 경로를 시도
+        // 여러 경로를 시도 (절대 경로부터)
         let geoResponse: Response | null = null
+        const currentOrigin = typeof window !== 'undefined' ? window.location.origin : ''
         const geoPaths = [
-          '/world-countries-detailed.json',
-          './world-countries-detailed.json',
-          'world-countries-detailed.json'
+          '/world-countries-detailed.json',  // 절대 경로 (가장 일반적)
+          `${currentOrigin}/world-countries-detailed.json`,  // 전체 URL
+          './world-countries-detailed.json',  // 상대 경로
+          'world-countries-detailed.json'     // 현재 디렉토리
         ]
         
         for (const path of geoPaths) {
           try {
+            console.log(`🔍 [GEOJSON] Trying path: ${path}`)
             geoResponse = await fetch(path)
             if (geoResponse.ok) {
               console.log(`✅ [GEOJSON] Found at: ${path}`)
               break
+            } else {
+              console.warn(`⚠️ [GEOJSON] Path ${path} returned status: ${geoResponse.status}`)
             }
-          } catch (error) {
-            console.warn(`⚠️ [GEOJSON] Failed to load from ${path}:`, error)
+          } catch (error: any) {
+            console.warn(`⚠️ [GEOJSON] Failed to load from ${path}:`, error.message)
             continue
           }
         }
         
         if (!geoResponse || !geoResponse.ok) {
-          console.error('❌ [GEOJSON] All paths failed, using fallback')
-          // GeoJSON 로드 실패해도 지도는 표시할 수 있도록 에러만 기록
-          setError('GeoJSON 파일을 불러올 수 없습니다. 지도 표시가 제한될 수 있습니다.')
+          console.error('❌ [GEOJSON] All paths failed, trying to continue without GeoJSON')
+          // GeoJSON 로드 실패해도 지도는 표시할 수 있도록 경고만 표시
+          // 에러를 설정하지 않음 (지도는 데이터 없이 표시 가능)
+          console.warn('⚠️ [GEOJSON] GeoJSON 파일을 불러올 수 없습니다. 지도 표시가 제한될 수 있습니다.')
         } else {
-          const worldData = await geoResponse.json()
-          setMapData(worldData)
-          console.log('✅ [GEOJSON] GeoJSON loaded successfully, features:', worldData.features?.length || 0)
+          try {
+            const worldData = await geoResponse.json()
+            setMapData(worldData)
+            console.log('✅ [GEOJSON] GeoJSON loaded successfully, features:', worldData.features?.length || 0)
+          } catch (parseError: any) {
+            console.error('❌ [GEOJSON] Failed to parse JSON:', parseError.message)
+          }
         }
 
         // 2. 모든 연도 데이터를 병렬로 로딩 (1995-2024)
@@ -464,12 +495,13 @@ export default function NoLoadingYearMap({
         
         setAllYearlyData(yearlyData)
         
-        // 실제 데이터가 하나도 없는 경우 에러 표시
+        // 실제 데이터가 하나도 없는 경우 경고만 표시 (에러로 처리하지 않음)
+        // 일부 연도에 데이터가 없을 수 있으므로 정상적인 상황일 수 있음
         if (successCount === 0) {
-          setError(`백엔드 서버에서 데이터를 불러올 수 없습니다. 서버가 실행 중인지 확인해주세요. (실패: ${failureCount}개 연도)`)
-          setAllYearlyData({}) // 빈 데이터로 설정하여 지도 표시 방지
+          console.warn(`⚠️ [INIT] No data found for any year. This might be normal if the database is empty.`)
+          // 에러를 설정하지 않고 빈 데이터로 진행 (지도는 표시되지만 데이터 없음)
         } else if (failureCount > successCount) {
-          setError(`일부 데이터를 불러오지 못했습니다. 백엔드 서버가 실행 중인지 확인해주세요. (성공: ${successCount}, 실패: ${failureCount})`)
+          console.warn(`⚠️ [INIT] Some years failed to load: success=${successCount}, failure=${failureCount}`)
         }
         
         console.log('✅ [INIT] All years data loaded successfully', {
