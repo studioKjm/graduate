@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.production
+.env.key
 
 # Python
 __pycache__/
@@ -110,6 +111,9 @@ dmypy.json
 !**/next.config.js
 !next-env.d.ts
 !**/next-env.d.ts
+# Public static files (must be tracked)
+!frontend/public/world-countries-detailed.json
+!**/world-countries-detailed.json
 # Frontend source directories (must be tracked)
 !frontend/lib/
 !frontend/lib/**
