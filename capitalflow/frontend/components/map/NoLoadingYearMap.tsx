@@ -444,6 +444,8 @@ export default function NoLoadingYearMap({
           // GeoJSON 로드 실패해도 지도는 표시할 수 있도록 경고만 표시
           // 에러를 설정하지 않음 (지도는 데이터 없이 표시 가능)
           console.warn('⚠️ [GEOJSON] GeoJSON 파일을 불러올 수 없습니다. 지도 표시가 제한될 수 있습니다.')
+          // GeoJSON이 없어도 빈 mapData를 설정하여 로딩 상태 해제
+          setMapData({ type: 'FeatureCollection', features: [] })
         } else {
           try {
         const worldData = await geoResponse.json()
@@ -451,6 +453,8 @@ export default function NoLoadingYearMap({
         console.log('✅ [GEOJSON] GeoJSON loaded successfully, features:', worldData.features?.length || 0)
           } catch (parseError: any) {
             console.error('❌ [GEOJSON] Failed to parse JSON:', parseError.message)
+            // 파싱 실패 시에도 빈 mapData 설정
+            setMapData({ type: 'FeatureCollection', features: [] })
           }
         }
 
@@ -653,51 +657,56 @@ export default function NoLoadingYearMap({
     return '#93c5fd' // 매우 밝은 파란색
   }
 
-  // 초기 로딩 중이거나 mapData가 없는 경우 - 먼저 체크
-  // isMounted는 이미 브라우저 환경에서 true로 설정되므로 체크 불필요
-  // initializationStartedRef는 useEffect가 실행되기 전에는 false일 수 있으므로,
-  // isLoading과 mapData 상태만으로 판단
-  if (isLoading || !mapData) {
-    // 로그를 최소화하여 성능 향상
+  // 초기 로딩 중인 경우만 로딩 표시
+  if (isLoading) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="text-gray-600 mb-2">
-            {!mapData ? 'GeoJSON 로딩 중...' : '데이터 로딩 중...'}
-          </div>
+          <div className="text-gray-600 mb-2">데이터 로딩 중...</div>
           {error && (
             <div className="text-sm text-red-600 mt-2 max-w-md px-4">
               {error}
             </div>
           )}
-      </div>
+        </div>
       </div>
     )
   }
 
-  // 실제 데이터가 없으면 지도 표시하지 않음 (더미 데이터 방지)
-  if (!currentMapData) {
-    // 데이터가 로딩 중이면 로딩 메시지 표시
-    if (isLoading) {
-      return (
-        <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
-          <div className="text-gray-600 mb-2">데이터 로딩 중...</div>
-        </div>
-      )
-    }
-    
-    // 실제 데이터가 없으면 에러 메시지 표시 (지도 표시 안 함)
+  // mapData가 없으면 (GeoJSON 로드 실패) 안내 메시지 표시
+  if (!mapData || !mapData.features || mapData.features.length === 0) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
-        <div className="text-red-600 font-semibold mb-2 text-center px-4">
-          백엔드 서버에서 데이터를 불러올 수 없습니다.
+        <div className="text-yellow-600 font-semibold mb-2 text-center px-4">
+          ⚠️ GeoJSON 파일을 불러올 수 없습니다
         </div>
         <div className="text-sm text-gray-600 max-w-md text-center px-4 mb-4">
-          {error || '백엔드 서버가 실행 중인지 확인해주세요. 실제 데이터만 사용하므로 서버가 필요합니다.'}
+          world-countries-detailed.json 파일이 배포에 포함되어 있는지 확인해주세요.
         </div>
-        <div className="text-xs text-gray-500 max-w-md text-center px-4">
-          더미 데이터는 사용하지 않습니다. 반드시 실제 데이터만 표시됩니다.
+        {error && (
+          <div className="text-xs text-red-500 max-w-md text-center px-4">
+            {error}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // 실제 데이터가 없으면 지도는 표시하되 데이터 없음 메시지 표시
+  if (!currentMapData || !currentMapData.features || currentMapData.features.length === 0) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
+        <div className="text-blue-600 font-semibold mb-2 text-center px-4">
+          📊 지도 데이터가 없습니다
         </div>
+        <div className="text-sm text-gray-600 max-w-md text-center px-4 mb-4">
+          선택한 연도와 필터 조건에 해당하는 데이터가 없습니다. 다른 연도나 필터를 선택해보세요.
+        </div>
+        {error && (
+          <div className="text-xs text-red-500 max-w-md text-center px-4">
+            {error}
+          </div>
+        )}
       </div>
     )
   }
