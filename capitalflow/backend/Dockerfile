@@ -43,8 +43,10 @@ EXPOSE 8000
 #     CMD curl -f http://localhost:${PORT:-8000}/api/v1/ || exit 1
 
 # 스크립트에 실행 권한 부여
-RUN chmod +x render_start.sh
+RUN chmod +x render_start.sh railway_start.sh
 
-# Render 시작 스크립트 실행
-# 이 스크립트는 마이그레이션, 정적 파일 수집, 슈퍼유저 생성을 자동으로 수행합니다
+# 시작 스크립트 실행
+# Railway를 사용하는 경우 railway_start.sh, Render를 사용하는 경우 render_start.sh
+# 기본값은 render_start.sh (하위 호환성)
+# Railway에서는 railway_start.sh를 사용하도록 CMD를 오버라이드할 수 있음
 CMD ["bash", "render_start.sh"]
