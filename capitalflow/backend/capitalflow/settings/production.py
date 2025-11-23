@@ -57,13 +57,15 @@ if DATABASE_URL:
     }
 else:
     # 개별 설정 사용 (기존 방식, DATABASE_URL이 없을 때만)
+    # Railway/Render 등에서 DATABASE_URL이 자동 설정되지 않은 경우를 위한 폴백
+    # 기본값을 제공하여 에러 방지
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': config('DB_NAME'),
-            'USER': config('DB_USER'),
-            'PASSWORD': config('DB_PASSWORD'),
-            'HOST': config('DB_HOST'),
+            'NAME': config('DB_NAME', default='capitalflow'),
+            'USER': config('DB_USER', default='postgres'),
+            'PASSWORD': config('DB_PASSWORD', default=''),
+            'HOST': config('DB_HOST', default='localhost'),
             'PORT': config('DB_PORT', default='5432'),
             'OPTIONS': {
                 'sslmode': 'require',
