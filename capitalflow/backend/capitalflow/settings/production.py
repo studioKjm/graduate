@@ -87,6 +87,18 @@ else:
 CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')
 CORS_ALLOWED_ORIGINS = [o.strip() for o in CORS_ALLOWED_ORIGINS if o.strip()]
 
+# Render 프론트엔드 자동 허용 (기본값)
+if not CORS_ALLOWED_ORIGINS:
+    # 환경 변수가 없으면 기본적으로 Render 프론트엔드 허용
+    CORS_ALLOWED_ORIGINS = [
+        'https://capitalflow-frontend.onrender.com',
+    ]
+
+# CORS 디버깅을 위한 로깅
+import logging
+logger = logging.getLogger(__name__)
+logger.info(f'CORS_ALLOWED_ORIGINS: {CORS_ALLOWED_ORIGINS}')
+
 # 정적 파일 설정 (WhiteNoise)
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATIC_URL = '/static/'
