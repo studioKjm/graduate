@@ -52,7 +52,7 @@ export default function NoLoadingYearMap({
       if (sector) params.append('sector', sector)
       params.append('year', year.toString())
       // capital_types는 배열로 전달 (백엔드에서 getlist로 받음)
-      capitalTypes.forEach(type => params.append('capital_types', type))
+        capitalTypes.forEach(type => params.append('capital_types', type))
       
       const url = `/api/v1/visualization/map-data/?${params.toString()}`
       console.log(`🌐 [API] Fetching from: ${url}`)
@@ -71,7 +71,7 @@ export default function NoLoadingYearMap({
           countriesCount: data?.data?.countries?.length || 0,
           sampleCountry: data?.data?.countries?.[0],
           fullResponse: data
-        })
+      })
       } catch (apiError: any) {
         console.error(`❌ [API] Request failed for year ${year}:`, {
           error: apiError.message,
@@ -446,9 +446,9 @@ export default function NoLoadingYearMap({
           console.warn('⚠️ [GEOJSON] GeoJSON 파일을 불러올 수 없습니다. 지도 표시가 제한될 수 있습니다.')
         } else {
           try {
-            const worldData = await geoResponse.json()
-            setMapData(worldData)
-            console.log('✅ [GEOJSON] GeoJSON loaded successfully, features:', worldData.features?.length || 0)
+        const worldData = await geoResponse.json()
+        setMapData(worldData)
+        console.log('✅ [GEOJSON] GeoJSON loaded successfully, features:', worldData.features?.length || 0)
           } catch (parseError: any) {
             console.error('❌ [GEOJSON] Failed to parse JSON:', parseError.message)
           }

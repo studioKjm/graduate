@@ -47,6 +47,5 @@ RUN chmod +x render_start.sh railway_start.sh
 
 # 시작 스크립트 실행
 # Railway를 사용하는 경우 railway_start.sh, Render를 사용하는 경우 render_start.sh
-# 기본값은 render_start.sh (하위 호환성)
-# Railway에서는 railway_start.sh를 사용하도록 CMD를 오버라이드할 수 있음
-CMD ["bash", "render_start.sh"]
+# Railway 환경 변수를 확인하여 자동으로 선택
+CMD ["bash", "-c", "if [ -n \"$RAILWAY_ENVIRONMENT\" ]; then bash railway_start.sh; else bash render_start.sh; fi"]
