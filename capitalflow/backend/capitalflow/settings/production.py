@@ -14,6 +14,16 @@ DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
 ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS if h.strip()]
 
+# Railway 도메인 자동 허용 (환경 변수에 없어도 작동하도록)
+if os.environ.get('RAILWAY_ENVIRONMENT'):
+    # Railway 환경에서는 *.railway.app 도메인 허용
+    if not any('.railway.app' in host for host in ALLOWED_HOSTS):
+        ALLOWED_HOSTS.append('*.railway.app')
+    # 현재 Railway 도메인도 허용 (RAILWAY_PUBLIC_DOMAIN이 있으면)
+    railway_domain = os.environ.get('RAILWAY_PUBLIC_DOMAIN')
+    if railway_domain and railway_domain not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(railway_domain)
+
 # Secret Key (환경 변수 필수)
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
