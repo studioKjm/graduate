@@ -36,5 +36,5 @@ CapitalFlow는 전 세계 자본 흐름을 시각적으로 탐색하고 시대�
 ---
 
 📘 **Main Repository:** [studioKjm/graduate](https://github.com/studioKjm/graduate)  
-📊 **Demo:** [CapitalFlow Live Demo (예정)](https://capitalflow.app)  
+📊 **Demo:** [CapitalFlow Live Demo (예정)](https://capitalflow-frontend.onrender.com/)  
 📖 **Detailed README:** [View Full Documentation](./capitalflow/README.md)

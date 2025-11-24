@@ -180,10 +180,24 @@ export default function NoLoadingYearMap({
       currentYearDataIsObject: currentYearData && typeof currentYearData === 'object'
     })
     
-    // 현재 연도 데이터가 없으면 null 반환 (지도 표시 방지, 실제 데이터만 사용)
+    // 현재 연도 데이터가 없으면 빈 지도 표시 (GeoJSON은 있으므로 지도는 표시)
     if (!currentYearData || Object.keys(currentYearData).length === 0) {
-      console.log(`⚠️ No data for year ${year}, returning null (no dummy data)`)
-      return null
+      console.log(`⚠️ No data for year ${year}, showing empty map (GeoJSON available)`)
+      return {
+        type: 'FeatureCollection',
+        features: mapData.features.map((feature: any) => ({
+          ...feature,
+          properties: {
+            ...feature.properties,
+            country_name: feature.properties?.NAME || feature.properties?.name || feature.id,
+            country_code: feature.id,
+            capital_amount: 0,
+            intensity: 0,
+            selected_capital_types: capitalTypes.length > 0 ? capitalTypes.join(', ') : '전체',
+            capital_type_count: capitalTypes.length || 1
+          }
+        }))
+      }
     }
 
     // 안전한 데이터 처리
@@ -194,10 +208,24 @@ export default function NoLoadingYearMap({
       sampleValues: capitalValues.slice(0, 5)
     })
     
-    // 실제 자본 값이 없으면 null 반환 (더미 데이터 방지)
+    // 실제 자본 값이 없으면 빈 지도 표시 (GeoJSON은 있으므로 지도는 표시)
     if (capitalValues.length === 0) {
-      console.log('⚠️ No capital values found, returning null (no dummy data)')
-      return null
+      console.log('⚠️ No capital values found, showing empty map (GeoJSON available)')
+      return {
+        type: 'FeatureCollection',
+        features: mapData.features.map((feature: any) => ({
+          ...feature,
+          properties: {
+            ...feature.properties,
+            country_name: feature.properties?.NAME || feature.properties?.name || feature.id,
+            country_code: feature.id,
+            capital_amount: 0,
+            intensity: 0,
+            selected_capital_types: capitalTypes.length > 0 ? capitalTypes.join(', ') : '전체',
+            capital_type_count: capitalTypes.length || 1
+          }
+        }))
+      }
     }
 
     // 더 드라마틱한 색상 분포를 위한 로그 스케일 적용
@@ -692,15 +720,32 @@ export default function NoLoadingYearMap({
     )
   }
 
-  // 실제 데이터가 없으면 지도는 표시하되 데이터 없음 메시지 표시
-  if (!currentMapData || !currentMapData.features || currentMapData.features.length === 0) {
+  // currentMapData가 없으면 (로딩 중이거나 에러) 처리
+  // 이제 데이터가 없어도 GeoJSON이 있으면 빈 지도를 표시하므로 이 체크는 로딩 중일 때만 필요
+  if (!currentMapData) {
+    // 로딩 중이 아니면 빈 지도도 표시해야 하는데 currentMapData가 null인 경우는 로딩 중이거나 에러
+    if (isLoading) {
+      return (
+        <div className="w-full h-full flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <div className="text-gray-600 mb-2">데이터 로딩 중...</div>
+            {error && (
+              <div className="text-sm text-red-600 mt-2 max-w-md px-4">
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    }
+    // 로딩이 완료되었는데 currentMapData가 null이면 에러
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
-        <div className="text-blue-600 font-semibold mb-2 text-center px-4">
-          📊 지도 데이터가 없습니다
+        <div className="text-red-600 font-semibold mb-2 text-center px-4">
+          ⚠️ 지도 데이터 생성 실패
         </div>
         <div className="text-sm text-gray-600 max-w-md text-center px-4 mb-4">
-          선택한 연도와 필터 조건에 해당하는 데이터가 없습니다. 다른 연도나 필터를 선택해보세요.
+          지도 데이터를 생성할 수 없습니다. 페이지를 새로고침해보세요.
         </div>
         {error && (
           <div className="text-xs text-red-500 max-w-md text-center px-4">
